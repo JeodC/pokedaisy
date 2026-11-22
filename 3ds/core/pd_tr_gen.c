@@ -2,7 +2,7 @@
 // hand: change those and run `make -C 3ds tables`. The keys the 3DS / Linux code uses, in strcmp order (pd_tr.h).
 #include "pd_tr.h"
 
-const struct pd_tr_entry pd_tr_table[738] = {
+const struct pd_tr_entry pd_tr_table[735] = {
     { "  HACK", { "  HACK", NULL, NULL, NULL, NULL, NULL, NULL } },
     { "  NONE", { "  NONE", "  AUCUN", "  KEINS", "  NESSUNO", "  NINGUNO", "  NENHUM", "  NENHUM" } },
     { "  SHINY", { "  SHINY", "  CHROMATIQUE", "  SCHILLERND", "  CROMATICO", "  VARIOCOLOR", "  BRILHANTE", "  BRILHANTE" } },
@@ -131,7 +131,6 @@ const struct pd_tr_entry pd_tr_table[738] = {
     { "CORNERS", { "CORNERS", "COINS", "ECKEN", "ANGOLI", "ESQUINAS", "CANTOS", "CANTOS" } },
     { "CORNERS 2", { "CORNERS 2", "COINS 2", "ECKEN 2", "ANGOLI 2", "ESQUINAS 2", "CANTOS 2", "CANTOS 2" } },
     { "COUNT", { "COUNT", "QUANTITÉ", "ANZAHL", "QUANTITÀ", "CANTIDAD", "QUANTIDADE", "QUANTIDADE" } },
-    { "CURRENT MOVES", { "CURRENT MOVES", "CAPACITÉS ACTUELLES", "AKTUELLE ATTACKEN", "MOSSE ATTUALI", "MOVIMIENTOS ACTUALES", "GOLPES ATUAIS", "GOLPES ATUAIS" } },
     { "Change a Pokémon, the bag or the trainer", { "Change a Pokémon, the bag or the trainer", "Modifiez d'abord un Pokémon, le sac", "Ändere zuerst ein Pokémon, den Beutel", "Cambia prima un Pokémon, la borsa", "Cambia antes un Pokémon, la mochila", "Mude antes um Pokémon, a mochila", "Muda antes um Pokémon, a mochila" } },
     { "Choose a POKéMON.", { "Choose a POKéMON.", "Choisis un POKéMON.", "Wähle ein POKéMON.", "Scegli un POKéMON.", "Elige un POKéMON.", "Escolha um POKéMON.", "Escolha um POKéMON." } },
     { "Close without saving them?", { "Close without saving them?", "Fermer sans les sauver ?", "Ohne Sichern beenden?", "Chiudere senza salvarle?", "¿Cerrar sin guardarlos?", "Fechar sem salvar?", "Fechar sem guardar?" } },
@@ -331,6 +330,7 @@ const struct pd_tr_entry pd_tr_table[738] = {
     { "Lying in the %s (%s).", { "Lying in the %s (%s).", "Au sol dans le %s (%s).", "Liegt im %s (%s).", "A terra nel %s (%s).", "En el suelo en el %s (%s).", "No chão no %s (%s).", "No chão no %s (%s)." } },
     { "Lying in the %s.", { "Lying in the %s.", "Au sol dans le %s.", "Liegt im %s.", "A terra nel %s.", "En el suelo en el %s.", "No chão no %s.", "No chão no %s." } },
     { "MAIL", { "MAIL", "LETTRES", "BRIEFE", "LETTERE", "CARTAS", "CARTAS", "CARTAS" } },
+    { "MAKEOVER", { "MAKEOVER", "RELOOKING", "NEUER LOOK", "NUOVO LOOK", "CAMBIO DE LOOK", "VISUAL NOVO", "VISUAL NOVO" } },
     { "MALE", { "MALE", "MÂLE", "MÄNNLICH", "MASCHIO", "MACHO", "MACHO", "MACHO" } },
     { "MAP", { "MAP", "CARTE", "KARTE", "MAPPA", "MAPA", "MAPA", "MAPA" } },
     { "MAX", { "MAX", NULL, NULL, NULL, "MÁX", "MÁX.", "MÁX." } },
@@ -342,7 +342,6 @@ const struct pd_tr_entry pd_tr_table[738] = {
     { "MISSING", { "MISSING", "ABSENT", "FEHLT", "ASSENTE", "AUSENTE", "AUSENTE", "AUSENTE" } },
     { "MISSING  %d NOT CAUGHT", { "MISSING  %d NOT CAUGHT", "MANQUANTS  %d NON CAPTURÉS", "FEHLEND  %d NICHT GEFANGEN", "MANCANTI  %d NON CATTURATI", "FALTAN  %d SIN CAPTURAR", "FALTAM  %d NÃO CAPTURADOS", "EM FALTA  %d NÃO CAPTURADOS" } },
     { "MONEY", { "MONEY", "ARGENT", "GELD", "SOLDI", "DINERO", "DINHEIRO", "DINHEIRO" } },
-    { "MORE", { "MORE", "PLUS", "MEHR", "ALTRO", "MÁS", "MAIS", "MAIS" } },
     { "MORNING", { "MORNING", "MATIN", "MORGEN", "MATTINA", "MAÑANA", "MANHÃ", "MANHÃ" } },
     { "MOVE %d", { "MOVE %d", "CAPACITÉ %d", "ATTACKE %d", "MOSSA %d", "MOVIMIENTO %d", "GOLPE %d", "GOLPE %d" } },
     { "MOVE 1", { "MOVE 1", "CAPACITÉ 1", "ATTACKE 1", "MOSSA 1", "MOVIMIENTO 1", "GOLPE 1", "GOLPE 1" } },
@@ -472,7 +471,6 @@ const struct pd_tr_entry pd_tr_table[738] = {
     { "PWR", { "PWR", "PUIS.", "STÄRKE", "POT.", "POT.", "POD.", "POD." } },
     { "PWR %d", { "PWR %d", "PUI %d", "STK %d", "POT %d", "POT %d", "POD %d", "POD %d" } },
     { "PWR %d  PP %d", { "PWR %d  PP %d", "PUI %d  PP %d", "STK %d  AP %d", "POT %d  PP %d", "POT %d  PP %d", "POD %d  PP %d", "POD %d  PP %d" } },
-    { "PWR %s PP %d", { "PWR %s PP %d", "PUI %s PP %d", "STK %s AP %d", "POT %s PP %d", "POT %s PP %d", "POD %s PP %d", "POD %s PP %d" } },
     { "PWR -", { "PWR -", "PUI -", "STK -", "POT -", "POT -", "POD -", "POD -" } },
     { "PWR -  PP %d", { "PWR -  PP %d", "PUI -  PP %d", "STK -  AP %d", "POT -  PP %d", "POT -  PP %d", "POD -  PP %d", "POD -  PP %d" } },
     { "Party full: swap %s with which POKéMON?", { "Party full: swap %s with which POKéMON?", "Équipe pleine : échanger %s avec quel POKéMON ?", "Team voll: %s mit welchem POKéMON tauschen?", "Squadra piena: scambiare %s con quale POKéMON?", "Equipo lleno: ¿cambiar %s por qué POKéMON?", "Equipe cheia: trocar %s com qual POKéMON?", "Equipa cheia: trocar %s com qual POKéMON?" } },
@@ -628,7 +626,6 @@ const struct pd_tr_entry pd_tr_table[738] = {
     { "TRADE FOR %s", { "TRADE FOR %s", "ÉCHANGER CONTRE %s", "GEGEN %s TAUSCHEN", "SCAMBIA CON %s", "CAMBIAR POR %s", "TROCAR POR %s", "TROCAR POR %s" } },
     { "TRADE SAVES", { "TRADE SAVES", "ÉCHANGE DE SAUVEGARDES", "SPIELSTÄNDE TAUSCHEN", "SCAMBIO TRA SALVATAGGI", "INTERCAMBIO DE PARTIDAS", "TROCA ENTRE SAVES", "TROCA ENTRE GRAVAÇÕES" } },
     { "TRAINER", { "TRAINER", "DRESSEUR", NULL, "ALLENATORE", "ENTRENADOR", "TREINADOR", "TREINADOR" } },
-    { "TRAINER CARD", { "TRAINER CARD", "CARTE DRESSEUR", "TRAINERPASS", "SCHEDA ALLENATORE", "FICHA DE ENTRENADOR", "CARTÃO DE TREINADOR", "CARTÃO DE TREINADOR" } },
     { "TURN ON", { "TURN ON", "ACTIVER", "EINSCHALTEN", "ATTIVA", "ACTIVAR", "ATIVAR", "ATIVAR" } },
     { "TYPE", { "TYPE", NULL, "TYP", "TIPO", "TIPO", "TIPO", "TIPO" } },
     { "Tabs that aren't on the tab bar are here. Pick the bar's tabs in TAB BAR.", { "Tabs that aren't on the tab bar are here. Pick the bar's tabs in TAB BAR.", "Les onglets absents de la barre sont ici. Choisissez ceux de la barre dans BARRE D'ONGLETS.", "Tabs, die nicht in der Leiste sind, findest du hier. Wähle die Tabs der Leiste unter TAB-LEISTE.", "Le schede fuori dalla barra sono qui. Scegli quelle della barra in BARRA SCHEDE.", "Las pestañas que no están en la barra están aquí. Elige las de la barra en BARRA PESTAÑAS.", "As abas fora da barra ficam aqui. Escolha as da barra em BARRA DE ABAS.", "Os separadores fora da barra ficam aqui. Escolha os da barra em BARRA DE SEPARADORES." } },
@@ -742,4 +739,4 @@ const struct pd_tr_entry pd_tr_table[738] = {
     { "the game.", { "the game.", "dans le jeu.", "im Spiel ab.", "nel gioco.", "en el juego.", "no jogo.", "no jogo." } },
     { "x%d  (a stack holds %d)", { "x%d  (a stack holds %d)", "x%d  (une pile en contient %d)", "x%d  (ein Stapel fasst %d)", "x%d  (una pila ne tiene %d)", "x%d  (un montón lleva %d)", "x%d  (uma pilha tem %d)", "x%d  (uma pilha tem %d)" } },
 };
-const int pd_tr_table_count = 738;
+const int pd_tr_table_count = 735;
