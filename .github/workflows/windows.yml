@@ -1,0 +1,86 @@
+# PokeDaisy for Windows as a release ships it: PokeDaisy.exe (the SDL2 host, windows/), its three libretro cores as
+# DLLs (GB / GBC on mGBA, GBA on armGBA with its interpreter, DS on the app's melonDS) and the zip windows/package.sh
+# packs, cross-built with MinGW-w64 in Fedora 41 (its mingw64-SDL2 / zlib / winpthreads packages; pinned). Given a release
+# tag (release.yml calls it with the tag it drafts; by hand: Actions > Windows > Run workflow), it attaches the zip to
+# that release, a draft included. On a change to the code it builds, it only builds, as a check.
+name: Windows
+
+on:
+  push:
+    branches: [main, dev]
+    paths: ['windows/**', 'linux/**', 'libretro/**', '3ds/core/**', '3ds/desktop/pd_png.*', 'app/src/main/cpp/**', 'shared/src/commonMain/cpp/**', 'third_party/mgba', 'third_party/armgba', 'third_party/melonds', 'third_party/zlib', 'third_party/dsperate-lr', 'third_party/patches/**', '.github/workflows/windows.yml']
+  pull_request:
+    paths: ['windows/**', 'linux/**', 'libretro/**', '3ds/core/**', '3ds/desktop/pd_png.*', 'app/src/main/cpp/**', 'shared/src/commonMain/cpp/**', 'third_party/mgba', 'third_party/armgba', 'third_party/melonds', 'third_party/zlib', 'third_party/dsperate-lr', 'third_party/patches/**', '.github/workflows/windows.yml']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'A release tag (v1.6.2) to build and attach the zip to; empty builds the branch only'
+        required: false
+        default: ''
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Windows zip
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    container: fedora:41@sha256:f1a3fab47bcb3c3ddf3135d5ee7ba8b7b25f2e809a47440936212a3a50957f3d
+    permissions:
+      contents: write # attaching to the release
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Toolchain
+        run: >-
+          dnf install -y -q mingw64-gcc mingw64-gcc-c++ mingw64-SDL2 mingw64-zlib mingw64-winpthreads-static
+          cmake make ninja-build python3 git zip gh && dnf clean all
+
+      # The source: the release's tag, else this commit.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ inputs.tag || github.sha }}
+
+      - name: Submodules
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git submodule update --init third_party/mgba third_party/armgba third_party/zlib third_party/melonds third_party/dsperate-lr
+
+      - name: Build the cores and the host
+        run: |
+          tc=-DCMAKE_TOOLCHAIN_FILE=/usr/share/mingw/toolchain-mingw64.cmake
+          b=build/win
+          cmake -G Ninja -S libretro -B $b/gbc $tc -DCMAKE_BUILD_TYPE=Release
+          cmake --build $b/gbc --target pokedaisy_gbc_libretro
+          # armGBA's x64 recompiler emits SysV code, which crashes on Win64: its interpreter (windows/CMakeLists.txt).
+          cmake -G Ninja -S libretro/armgba -B $b/gba $tc -DCMAKE_BUILD_TYPE=Release -DARMGBA_JIT=OFF
+          cmake --build $b/gba --target pokedaisy_gba_libretro
+          cmake -G Ninja -S windows/ds-core -B $b/ds $tc -DCMAKE_BUILD_TYPE=Release
+          cmake --build $b/ds --target pokedaisy_ds_libretro
+          cmake -G Ninja -S windows -B $b/host $tc -DCMAKE_BUILD_TYPE=Release
+          cmake --build $b/host --target PokeDaisy
+
+      - name: Zip
+        run: windows/package.sh build/win out
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pokedaisy-windows-x86_64
+          path: out/*.zip
+          if-no-files-found: error
+
+      - name: Attach to the release
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" out/*.zip --clobber -R "$GITHUB_REPOSITORY"

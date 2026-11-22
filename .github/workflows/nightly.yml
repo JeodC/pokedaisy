@@ -1,6 +1,7 @@
 # The full suite on dev, once a night: everything CI runs on a PR (unit tests with every Paparazzi render, the debug
 # APK, ui-preview stress / docs search / keyed state, the manual), the Linux and libretro builds whatever paths
-# changed, and what no PR job runs (the 3DS port's generated configs; every ui-preview render, off for now). A night
+# changed, and what no PR job runs (the release APK's build, unsigned; the 3DS port's generated configs; every ui-preview
+# render, off for now). A night
 # with no new commit on dev is skipped; a manual run (Actions > Nightly > Run workflow) always runs, on dev or any
 # branch named.
 #
@@ -81,6 +82,21 @@ jobs:
     uses: lidor30/pokedaisy/.github/workflows/libretro.yml@dev
     with:
       ref: ${{ needs.target.outputs.sha }}
+
+  # The release APK's build, unsigned, through the Release workflow's own action (.github/actions/release-build): the
+  # submodules, the toolchain, the wrapper check and both ABIs. Nothing else builds a release APK, so without this a
+  # release run was the first to meet a break (1.6.2-beta.2: Azahar's SDL copy failed the wrapper check).
+  release-build:
+    name: Release APK (dry run)
+    needs: target
+    if: needs.target.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ needs.target.outputs.sha }}
+      - uses: ./.github/actions/release-build
 
   # make check's 3DS step: the generated C configs equal the old hand-written tables (3ds/test/configs_gen_test.c).
   configs-3ds:

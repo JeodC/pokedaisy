@@ -223,6 +223,18 @@ jobs:
   # The manual (docs/manual): every page draws in both readers, links and screenshots resolve, no dashes,
   # and every setting the app has is documented (website/test/docs.test.js) - so a PR that adds a setting
   # without its docs fails here.
+  # make gen-check: every generator's --check but gen_gamedata.py's (the unit test job runs that one). A stale 3DS table
+  # otherwise showed only on the Linux workflow, which a PR that doesn't touch Linux paths never runs.
+  generated:
+    name: Generated files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          ref: ${{ inputs.ref }}
+      - run: make gen-check
+
   docs:
     name: Docs
     runs-on: ubuntu-latest

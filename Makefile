@@ -63,8 +63,23 @@ gamedata: ## Regenerate the per-game code from gamedata/ (NativeConfigsGen.kt, t
 MODULE ?= $(if $(strip $(T)),$(shell python3 scripts/test_module.py '$(T)'))
 UNIT_TESTS = $(if $(strip $(T)),$(foreach m,$(MODULE),:$(m):testDebugUnitTest --tests '$(T)'),:app:testDebugUnitTest :shared:testDebugUnitTest :shared-ui:testDebugUnitTest)
 
-test-quick: ## Everyday unit tests: no Paparazzi renders or BestEffortTest, forks in parallel (MODULE=shared T='*FooTest' to pick)
+test-quick: gen-check ## Everyday unit tests: no Paparazzi renders or BestEffortTest, forks in parallel (MODULE=shared T='*FooTest' to pick)
 	./gradlew $(UNIT_TESTS) -Pquick
+
+# Generated files that went stale where nothing local looked: 1.6.2-beta.2's 3DS translation table and experience
+# stamp showed only on main's Linux run, an extra commit and CI wait each on release day. A second or two; CI's
+# "Generated files" job runs it on every PR. gen_gamedata.py (~20 s) stays in `check` and CI's unit test job.
+gen-check: ## The generators' --check, all but gen_gamedata.py (fast; test-quick and CI run it)
+	python3 scripts/gen_nds_ports.py --check
+	python3 scripts/gen_area_maps.py --check
+	python3 3ds/tools/gen_tr.py --check
+	python3 3ds/tools/gen_stats.py --check
+	python3 3ds/tools/gen_experience.py --check
+	python3 3ds/tools/gen_save_tables.py --check
+	python3 libretro/gen_flight.py --check
+	python3 linux/dsperate/gen_data.py --check
+	python3 scripts/check_melonds_patch.py
+	python3 scripts/check_azahar_patch.py
 
 test: ## All JVM unit tests, Paparazzi renders included (CLAUDE.md: agents ask first)
 	./gradlew $(UNIT_TESTS)
@@ -77,11 +92,8 @@ clean: ## gradle clean
 check: ## Everything a PR must pass: unit tests, translations, game data, ui-preview stress + docs search, docs, debug build
 	python3 scripts/check_translations.py
 	python3 scripts/gen_gamedata.py --check
-	python3 scripts/gen_nds_ports.py --check
-	python3 scripts/gen_area_maps.py --check
+	$(MAKE) --no-print-directory gen-check
 	@if python3 -c 'import PIL' 2>/dev/null; then python3 scripts/gen_small_font.py --check; else echo "gen_small_font.py --check skipped: this python3 has no Pillow (pip install pillow)"; fi
-	python3 scripts/check_melonds_patch.py
-	python3 scripts/check_azahar_patch.py
 	$(MAKE) -C 3ds test-configs-gen
 	./gradlew $(UNIT_TESTS) :app:assembleDebug :shared:compileKotlinIosArm64
 	./gradlew -p ui-preview stress

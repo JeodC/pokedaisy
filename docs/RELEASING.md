@@ -21,12 +21,15 @@ git commit -am "Version 1.2.0" && git push   # or through a PR, like any change
 make release               # tags v1.2.0 on main and pushes the tag
 ```
 
-Then follow the **Release** run in the repo's Actions tab. Its last job waits for you:
-**Review deployments → release → Approve**. When it's green the release is on GitHub as a
-**draft**, with `PokeDaisy-1.2.0.apk` attached. Only you see it. Edit its notes, add any other
-platform's files (`gh release upload v1.2.0 <files>`: the Linux packages; the APK stays the
-release's first `.apk`), then publish it: **Publish release** on its page, or
-`gh release edit v1.2.0 --draft=false`. Publishing starts the **Website** workflow (a full
+Then follow the **Release** run in the repo's Actions tab. Tag only once main's **CI** has passed on the
+commit: the run then reuses that result instead of running CI again (about 25 minutes; with no passed run on that
+commit it runs CI itself, as before). Its build job waits for you: **Review deployments → release → Approve**
+(or `gh api -X POST repos/lidor30/pokedaisy/actions/runs/<run id>/pending_deployments -F "environment_ids[]=<id>"
+-f state=approved -f comment=<version>`, the id from `.../pending_deployments`, when a click in the page doesn't
+register). When it's green the release is on GitHub as a **draft** with every file: `PokeDaisy-1.2.0.apk`, then,
+from jobs after it, the 3DS app and CIA, the Windows zip and the six Linux zips (each section below). Only you see it.
+Put its notes on (`gh release edit v1.2.0 --notes-file <notes>`), then run `3ds.yml` again if the QR block went
+missing (below), then publish it: **Publish release** on its page, or `gh release edit v1.2.0 --draft=false`. Publishing starts the **Website** workflow (a full
 release only), and the in-app updater offers the version on the next library open.
 
 - Releases are immutable once published: a broken APK can't be swapped, nor a file added,
@@ -37,7 +40,11 @@ release only), and the in-app updater offers the version on the next library ope
   for it. See "Betas and release candidates" below.
 - If a run fails, nothing is published. Fix it on `main`, delete the tag
   (`git push --delete origin v1.2.0 && git tag -d v1.2.0`), and run `make release`
-  again.
+  again (the run reads its workflow from the tagged commit, so re-running the old run fails the same way). The
+  Nightly's **Release APK (dry run)** builds the release APK the same way every night (unsigned, through the same
+  `.github/actions/release-build`), so a broken build shows there first: look at the last night before tagging.
+- A platform job that fails after the draft is up (3DS, Windows, Linux) leaves the APK's draft as it is: fix it on
+  `main` and run that workflow by hand on the tag (each section below), no new tag needed.
 - Without CI (e.g. GitHub Actions down): `make release-local` builds, signs, uploads
   the symbols and puts the release up as a draft with the `gh` CLI from your Mac; publish it
   the same way. Its tag push starts the Release workflow too: cancel that run (`gh run cancel`)
@@ -90,17 +97,18 @@ before you tag the release.
 
 **Each pre-release:**
 - notes start with what to test and a line that it's a beta (the Release workflow marks it a pre-release)
-- the 3DS and Linux files go on it as on a release
+- the 3DS, Windows and Linux files go on it as on a release (the Release run attaches them)
 - post it in #beta-announcements with the release page's link (ping the Beta tester role)
 - issues from testers get the `beta` label; one that a beta caused blocks the rc
 
 ## The 3DS files
 
-The Release run's last job (`3DS app and CIA`, `.github/workflows/3ds.yml`) builds the 3DS app from the tag and puts
+The Release run's `3DS app and CIA` job (`.github/workflows/3ds.yml`) builds the 3DS app from the tag and puts
 three files on the draft: `pokedaisy.3dsx` (the Homebrew Launcher), `pokedaisy.cia` (the HOME Menu, installed with FBI)
 and `pokedaisy-cia-qr.png`, the CIA's download link as a QR code for FBI's Remote Install > Scan QR Code, which it also
 adds to the notes (under `<!-- qr -->`; a second run replaces it). So put the notes on before it runs, or run it again
-after. On a local release (the Release run cancelled), run it by hand once the draft is up:
+after (the draft's notes are set last, so after setting them run it again). On a local release (the Release run
+cancelled), or when that job failed, run it by hand once the draft is up:
 
 ```bash
 gh workflow run 3ds.yml --ref main -f tag=v1.2.0 -f upload_3dsx=true
@@ -111,8 +119,9 @@ bannertool on the PATH).
 
 ## The Linux files (beta)
 
-The **Linux foundation** workflow (`.github/workflows/linux.yml`) builds them; the Release workflow doesn't. It runs on
-pushes that touch Linux code, so start it on the tag yourself once the draft is up, then add its files to the draft:
+The Release run's `Linux` job runs the **Linux foundation** workflow (`.github/workflows/linux.yml`, its tests
+included) on the tag once the draft is up, and `Linux zips onto the draft` attaches its six files. If either failed, or
+on a local release, run it by hand and add the files:
 
 ```bash
 V=1.2.0
@@ -137,16 +146,24 @@ it on `main`, then follow the "If a run fails" steps above.
 
 ## Windows
 
-No workflow builds Windows yet: build it on this Mac with MinGW in Docker (the release skill's recipe: `libretro`,
-`libretro/armgba` with `-DARMGBA_JIT=OFF`, `windows/ds-core`, `windows`, each with the mingw64 toolchain file) and upload
-one zip to the draft:
+The Release run's `Windows zip` job runs `.github/workflows/windows.yml` on the tag: the four MinGW-w64 builds
+(`libretro`, `libretro/armgba` with `-DARMGBA_JIT=OFF`, `windows/ds-core`, `windows`) in a pinned Fedora 41 container,
+then `windows/package.sh`, which packs the zip and stops if the exe or a core imports a DLL that is neither Windows' own
+nor in the zip. It attaches the zip to the draft. If it failed, or on a local release:
+
+```bash
+gh workflow run windows.yml --ref main -f tag=v1.2.0
+```
+
+Locally, the same in Fedora with `mingw64-gcc-c++ mingw64-SDL2 mingw64-zlib mingw64-winpthreads-static cmake ninja-build
+git zip`: the workflow's build step, then `windows/package.sh build/win out`.
 
 | File | For |
 | --- | --- |
 | `PokeDaisy-<version>-windows-x86_64.zip` | 64-bit Windows 10 / 11: `PokeDaisy.exe`, its three cores' `.dll`s, `SDL2.dll`, the MinGW runtime DLLs (`libgcc_s_seh-1.dll`, `libwinpthread-1.dll`, `zlib1.dll`), `LICENSE`, `NOTICE`, `licenses/` and `SOURCE.txt` |
 
-Check with `x86_64-w64-mingw32-objdump -p` that every DLL the exe and cores name is Windows' own or in the zip. The
-install guide is the manual's `windows-install.md`. Never ship a DS core built with its JIT off.
+The install guide is the manual's `windows-install.md`. A real Windows PC is the only full check: Wine runs the host
+but not the DS core's JIT. Never ship a DS core built with its JIT off (a Wine-only test build).
 
 ## One APK for arm64 and 32-bit ARM
 

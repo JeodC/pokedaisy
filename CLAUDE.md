@@ -231,7 +231,7 @@ loading one keeps the battery save in memory (`load_state_keeping_save`), like t
 
 The user runs several agents at once and runs the full suites about once a day, so (the user's rule, 2026-11-01):
 
-- **Everyday check: `make test-quick`** (`./gradlew :app:testDebugUnitTest :shared:testDebugUnitTest -Pquick`, about 1 min warm; companion/data and
+- **Everyday check: `make test-quick`** (`make gen-check` first - every generator's `--check` but gen_gamedata's, under a second; then `./gradlew :app:testDebugUnitTest :shared:testDebugUnitTest -Pquick`, about 1 min warm; companion/data and
   companion/i18n are compiled and tested by `shared/`, docs/DEVELOPMENT.md's "The shared module"). It
   drops the Paparazzi renders (`*ScreenshotTest`: they assert nothing and were 86% of the full run's ~10 min)
   and `BestEffortTest` (26 whole ROMs, ~45 s), and runs the forks side by side. Fixture decodes, ROM-backed
