@@ -9,8 +9,9 @@
 # Windows' own or in the zip, else it stops: a missing one shows only on a player's PC.
 set -euo pipefail
 
-build=$1
-out=$2
+build=$(cd "$1" && pwd)
+mkdir -p "$2"
+out=$(cd "$2" && pwd) # absolute: the zip is made from inside the staging folder
 root=$(cd "$(dirname "$0")/.." && pwd)
 version=${3:-$(sed -n 's/^ *versionName = "\(.*\)"/\1/p' "$root/app/build.gradle.kts")}
 commit=${4:-$(git -C "$root" rev-parse HEAD)}
