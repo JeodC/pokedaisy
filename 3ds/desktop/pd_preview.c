@@ -324,6 +324,8 @@ int main(int argc, char** argv) {
     shot(out, name, "pick-screen", px);
     tap(&p, HIT_OPTION + PD_SCREEN_STRETCH, 0);
     printf("action %d, screen mode %d\n", pd_ui_take_action(&ui), settings.screenMode);
+    // SAVE STATE ends the list (under APP since the settings took Android's groups): scroll down to it.
+    for (int i = 0; i < 20 && !has_hit(&p, HIT_SETTING + SETTING_SAVE_STATE); i++) drag(&p, HIT_SETTINGS_LIST, -80);
     tap(&p, HIT_SETTING + SETTING_SAVE_STATE, 0);
     shot(out, name, "confirm-save", px);
     tap(&p, HIT_YES, 0);
