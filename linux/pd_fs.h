@@ -102,7 +102,7 @@ static inline void pd_save_path_named(const char *dir, const char *romPath, cons
   bool haveWhole = !stat(out, &whole), havePlain = !stat(base, &plain);
   if (haveWhole && (!havePlain || whole.st_mtime > plain.st_mtime))
     return; // only the old name, or it was written last
-  snprintf(out, size, "%s", base);
+  memcpy(out, base, (size_t)n + 1);
 }
 static inline void pd_save_path(const char *dir, const char *romPath, char *out, size_t size) {
   pd_save_path_named(dir, romPath, pd_base_name(romPath), out, size);

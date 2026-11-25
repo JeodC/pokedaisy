@@ -53,21 +53,21 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     run(d,str(d/'roms/solo.gb'),'--frames','120')
     assert (d/'saves/solo.sav').read_bytes()[:1]==b'\x5a','the save named without the ROM extension was not the one written'
     assert not (d/'saves/solo.gb.sav').exists(),'the ROM-named save was made beside the other emulator name'
-    # With both names there, the ROM's own file name wins.
-    (d/'saves/solo.gb.sav').write_bytes(b'\0'*8192)
+    # With both names there, the one written last wins.
+    (d/'saves/solo.gb.sav').write_bytes(b'\0'*8192);os.utime(d/'saves/solo.sav',(0,0))
     run(d,str(d/'roms/solo.gb'),'--frames','120')
-    assert (d/'saves/solo.gb.sav').read_bytes()[:1]==b'\x5a','the ROM-named save did not win'
+    assert (d/'saves/solo.gb.sav').read_bytes()[:1]==b'\x5a','the save written last did not win'
     (d/'roms/solo.gb').unlink()
     # A zipped ROM plays as the ROM inside, its save named after it (the app's and RetroArch's rule), or after the zip
     # when only the zip's own name has one; the DS core gets it as a file.
     packed=d/'roms'/'Packed (USA).zip'
     with zipfile.ZipFile(packed,'w',zipfile.ZIP_DEFLATED) as z:z.write(diag/'diagnostic.gb','inside.gb')
     run(d,str(packed),'--frames','120')
-    assert (d/'saves/inside.gb.sav').read_bytes()[:1]==b'\x5a','the zipped ROM did not run'
+    assert (d/'saves/inside.sav').read_bytes()[:1]==b'\x5a','the zipped ROM did not run'
     assert [p.name for p in (d/'unzipped').rglob('*') if p.is_file()]==['inside.gb']
-    (d/'saves/inside.gb.sav').unlink();(d/'saves/Packed (USA).sav').write_bytes(b'\0'*8192)
+    (d/'saves/inside.sav').unlink();(d/'saves/Packed (USA).sav').write_bytes(b'\0'*8192)
     run(d,str(packed),'--frames','120')
-    assert (d/'saves/Packed (USA).sav').read_bytes()[:1]==b'\x5a' and not (d/'saves/inside.gb.sav').exists()
+    assert (d/'saves/Packed (USA).sav').read_bytes()[:1]==b'\x5a' and not (d/'saves/inside.sav').exists()
     assert [p.name for p in (d/'unzipped').rglob('*') if p.is_file()]==['Packed (USA).gb']
     (d/'saves/Packed (USA).sav').unlink()
     with zipfile.ZipFile(packed,'w',zipfile.ZIP_DEFLATED) as z:z.write(diag/'diagnostic.nds','inside.nds')
@@ -88,16 +88,16 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     rtc=bytearray((diag/'diagnostic.gb').read_bytes());rtc[0x147]=0x10;rtc[0x14d]=(-sum(rtc[0x134:0x14d])-25)&255
     (d/'roms/clock.gb').write_bytes(rtc)
     run(d,str(d/'roms/clock.gb'),'--frames','120')
-    clock=(d/'saves/clock.gb.sav').read_bytes();assert len(clock)==8192+48 and clock[:1]==b'\x5a',len(clock)
+    clock=(d/'saves/clock.sav').read_bytes();assert len(clock)==8192+48 and clock[:1]==b'\x5a',len(clock)
     assert any(clock[8192:]),'the clock bytes are empty'
     # Each run moves the clock behind the save: that alone makes no new backup (only the save data counts).
     run(d,str(d/'roms/clock.gb'),'--frames','10');time.sleep(1.1);run(d,str(d/'roms/clock.gb'),'--frames','10')
-    kept=list((d/'saves/pokedaisy-backups').glob('clock.gb.backup-*.sav'));assert len(kept)==1,kept
+    kept=list((d/'saves/pokedaisy-backups').glob('clock.backup-*.sav'));assert len(kept)==1,kept
     # A save shared with the firmware's emulators (SHARED SAVES): its file keeps its size and name.
     gb,srm=d/'firmware/gb',d/'retroarch/gb';gb.mkdir(parents=True);srm.mkdir(parents=True)
     env.update(POCKET_ROM_DIRS=str(gb),POCKET_SAVE_DIRS=str(srm))
     shutil.copy(diag/'diagnostic.gb',gb/'Off.gb');run(d,str(gb/'Off.gb'),'--frames','120')
-    assert (d/'saves/Off.gb.sav').exists() and not list(srm.iterdir())
+    assert (d/'saves/Off.sav').exists() and not list(srm.iterdir())
     with (d/'host.ini').open('a') as f:f.write('shared_saves=1\n')
     shutil.copy(diag/'diagnostic.gb',gb/'Shared.gb');(srm/'Shared.srm').write_bytes(b'\0'*8192+b'tail')
     run(d,str(gb/'Shared.gb'),'--frames','120')
@@ -109,7 +109,7 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     assert len((srm/'Next.srm').read_bytes())==8192
     shutil.copy(diag/'diagnostic.gb',gb/'Rzip.gb');(srm/'Rzip.srm').write_bytes(b'#RZIPv1#'+b'\0'*60)
     r=subprocess.run([str(binary),'--data',str(d),str(gb/'Rzip.gb'),'--frames','10'],env=env,capture_output=True,text=True,timeout=60)
-    assert r.returncode!=0 and not (d/'saves/Rzip.gb.sav').exists() and (srm/'Rzip.srm').read_bytes()[:8]==b'#RZIPv1#'
+    assert r.returncode!=0 and not (d/'saves/Rzip.sav').exists() and (srm/'Rzip.srm').read_bytes()[:8]==b'#RZIPv1#'
     # A zipped one, and one without a save yet: RetroArch names it after the ROM inside.
     with zipfile.ZipFile(gb/'Zipped.zip','w') as z:z.write(diag/'diagnostic.gb','Zipped inside.gb')
     run(d,str(gb/'Zipped.zip'),'--frames','120')
