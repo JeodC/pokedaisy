@@ -3,9 +3,9 @@
 import os,random,subprocess,sys,tempfile,zipfile,zlib
 from pathlib import Path
 
-binary=Path(sys.argv[1]).resolve()
+binary=[*sys.argv[1:-1],str(Path(sys.argv[-1]).resolve())] # a cross build's emulator before it
 def run(cmd,*args):
-    r=subprocess.run([str(binary),cmd,*map(str,args)],capture_output=True,text=True,timeout=60)
+    r=subprocess.run([*binary,cmd,*map(str,args)],capture_output=True,text=True,timeout=60)
     assert r.returncode==0,(cmd,args,r.returncode,r.stderr)
     return r.stdout.rstrip('\n')
 def crc(data):return f'{zlib.crc32(data):08x}'
