@@ -82,7 +82,7 @@ GKD 350H running ROCKNIX.
 - **Your games:** the game list shows `ports/pokedaisy/roms` and the Pokemon games in the firmware's own `gba`, `gb`,
   `gbc`, `nds`, `Game Boy Advance`, `Game Boy Color`, `Game Boy` and `Nintendo DS` folders, wherever they exist next
   to `ports`. Your other games in those folders stay out of it, and so do the Pokemon spin-offs (Pinball, the card
-  games, Puzzle Challenge, Mystery Dungeon).
+  games, Puzzle Challenge, Picross, Mystery Dungeon).
 - **The menu:** press the Menu or Guide button. SELECT and START together quit the port, as in any PortMaster game.
 - PortMaster tells PokeDaisy your device's buttons, so they work without setup.
 

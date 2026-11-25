@@ -17,7 +17,7 @@
 #endif
 
 #define MAX_GB (0x10000 + 512) // the biggest save and a clock: a bigger .sav / .srm is another console's game's
-#define MAX_GBA (0x20000 + 512)
+#define MAX_GBA (0x20000 + 0x2000) // VBA Next's has the EEPROM after the flash
 #define MBC3_CLOCK 48u    // mGBA's GBMBCRTCSaveBuffer: 5 clock words, 5 latched ones, when they were latched
 #define GAMBATTE_CLOCK 8u // when the clock read 0
 #define DAY 86400

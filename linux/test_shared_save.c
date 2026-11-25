@@ -30,7 +30,7 @@ static bool none(const char *rom, const char *name) { return !find(rom, name); }
 static bool bad(const char *rom, const char *name) { return find(rom, name) == -1; }
 
 static void paths(void) {
-  static const char big[0x20401];
+  static const char big[0x22001];
   assert(none("roms/gba/A.gba", "A.gba"));
   char roms[8192], saves[8192];
   snprintf(roms, sizeof roms, "%s/roms/gb:%s/roms/gba/:%s/roms/nds:%s/roms/off", dir, dir, dir, dir);
@@ -73,6 +73,11 @@ static void paths(void) {
   // A Game Boy game never takes a GBA game's bigger .srm, which it would write over.
   put("saves/gb/H.srm", big, 0x20000);
   assert(none("roms/gb/H.gb", "H.gb"));
+  // VBA Next's GBA .srm, and one past it.
+  put("saves/gba/V.srm", big, 0x22000);
+  assert(is("roms/gba/V.gba", "V.gba", "saves/gba/V.srm"));
+  put("saves/gba/V.srm", big, sizeof big);
+  assert(none("roms/gba/V.gba", "V.gba"));
   // Two consoles' games of one name whose saves go to one folder: neither shares (PokeDaisy's own save instead).
   put("roms/gb/F.gb", "x", 1);
   put("roms/gba/F.gba", "x", 1);

@@ -2476,8 +2476,8 @@ static const char *core_for(const char *path) {
 /* The game list shows the main Pokemon games only (the firmware's folders hold every other game too), told by the cart's
  * header: a GBA game code of FireRed / LeafGreen / Emerald / Ruby / Sapphire (the hacks keep theirs) or a hack's own,
  * a Game Boy title of Red / Blue / Green / Yellow / Gold / Silver / Crystal and their hacks (not Pinball, the card
- * games or Puzzle Challenge), a DS game code of Diamond / Pearl / Platinum / HeartGold / SoulSilver / Black / White /
- * their sequels. */
+ * games, Puzzle Challenge or Picross), a DS game code of Diamond / Pearl / Platinum / HeartGold / SoulSilver / Black /
+ * White / their sequels. */
 static bool pokemon_rom(const char *path, const char *name) {
   unsigned char h[0x150];
   size_t n = rom_head(path, h, sizeof h);
@@ -2503,7 +2503,8 @@ static bool pokemon_rom(const char *path, const char *name) {
     return false;
   char title[17] = {0};
   memcpy(title, h + 0x134, 16);
-  static const char *const spinOffs[] = {"POKECARD", "POKEPINBALL", "POKEMON PC", "POKEMONPC", "POKEMON-CG", "POKEMON PINB"};
+  static const char *const spinOffs[] = {"POKECARD", "POKEPINBALL", "POKEPICROSS", "POKEMON PC", "POKEMONPC", "POKEMON-CG",
+                                         "POKEMON PINB"};
   for (size_t i = 0; i < sizeof spinOffs / sizeof *spinOffs; i++)
     if (!strncmp(title, spinOffs[i], strlen(spinOffs[i])))
       return false;
