@@ -172,6 +172,44 @@ int uiW=341,uiH=256;
 // frontend's screen (pokedaisy_panel), and whether it does.
 int panelW=0,panelH=0;
 bool companionHost=false;
+// A second screen (PD_ENV_SECOND_SCREEN) shows the DS's touch screen, or the companion in its place (secondCompanion, and
+// always with a DS LAYOUT other than TWO SCREENS). The game runs under either, and the finger is the shown one's. One that
+// was down when they changed places, or went down on the switch, is neither's until it's lifted (secondHeld). With secondPad
+// the buttons are on the companion.
+pd_second_screen second{};
+bool secondOn=false,secondCompanion=false,secondPad=false,secondTouch=false,secondHeld=false,secondSwitch=false,secondDown=false;
+unsigned secondTick=0,secondRevision=0;
+uint32_t second_pixels[256*192];
+DsRect switchBox;
+int stripRows=0;
+bool two_screens(){return secondOn && shell.shown_layout()==DS_TWO;}
+bool second_companion(){return secondOn && (secondCompanion || !two_screens());}
+void drop_second_touch(){
+  secondTouch=false;
+  shell.cancel_touch();
+}
+void leave_second_pad(){
+  secondPad=false;
+  hudConsumed|=buttons; // the press that left it isn't the game's
+}
+void show_companion(bool on){
+  if(secondCompanion==on)return;
+  secondCompanion=shell.bottomCompanion=on;
+  shell.save();
+  secondHeld=second.ptr_down;
+  drop_second_touch();
+  if(!on && secondPad)leave_second_pad();
+}
+void open_companion(){
+  if(!secondOn){companion=true;return;}
+  if(two_screens())show_companion(true);
+  secondPad=true;
+}
+void close_companion(){
+  companion=false;
+  if(secondPad)leave_second_pad();
+  if(two_screens())show_companion(false);
+}
 void choose_companion_canvas(){
   uiW=341;uiH=256;
   retro_variable v{"pokedaisy_panel",nullptr};
@@ -220,7 +258,7 @@ void clear_battle() {
   battleHeld=0;holdStrip=restoreGrace=0;battleActive=injectBattleTap=wasInBattle=false;
 }
 bool wants_strip() {
-  return game && battleStyle && shell.battleStrip && shell.layout==DS_ONE && !screen_override &&
+  return game && battleStyle && shell.battleStrip && shell.shown_layout()==DS_ONE && !screen_override &&
     !manualTouch && !companion && !quickOpen;
 }
 DsBattleView battle_view(int bits) {
@@ -307,9 +345,10 @@ void refresh() {
   // On the newer games an invalid transient read can occur as the game
   // decrypts a record in place. Keep the last coherent snapshot.
   if(next.valid||companionGame==DsGame::Platinum){
+    const bool moved=next.map!=snapshot.map;
     snapshot=std::move(next);
     shell.guideLoadedPage=-1;
-    pd_ui_guide_reset(&shell.frame);
+    if(moved||!second_companion())pd_ui_guide_reset(&shell.frame); // a guide being read stays where it is
   }
   ds_map_update(map,snapshot);
   hudLayerValid=false;
@@ -323,7 +362,7 @@ void choose_layout() {
   const bool inBattle=bits&PK_NDS_FIELD_BATTLE;
   // A screen peek in the overworld shouldn't carry into the next fight.
   // Screen changes made during a fight still give access to the native panel.
-  if(inBattle&&!wasInBattle&&shell.layout==DS_ONE&&shell.battleStrip){
+  if(inBattle&&!wasInBattle&&shell.shown_layout()==DS_ONE&&shell.battleStrip){
     screen_override=0;
     manualTouch=false;
   }
@@ -397,8 +436,8 @@ void choose_layout() {
   if(inBattle&&battleStrip.moveCommitFrames>0&&!(bits&PK_NDS_FIELD_TOUCH_FADES))
     displayBits&=~(PK_NDS_FIELD_TOUCH|PK_NDS_FIELD_TOUCH_BATTLE_MENU);
   // PIP already exposes the native battle panel; it must not float twice.
-  scene.tick(displayBits,topBlank,bottomBlank,!battleActive&&(shell.autoBattles||wants_strip())&&shell.layout!=DS_PIP);
-  int mode=screen_override==1?DS_BOTTOM:screen_override==2?DS_TOP:shell.layout;
+  scene.tick(displayBits,topBlank,bottomBlank,!battleActive&&(shell.autoBattles||wants_strip())&&shell.shown_layout()!=DS_PIP);
+  int mode=screen_override==1?DS_BOTTOM:screen_override==2?DS_TOP:shell.shown_layout();
   arrangement=ds_arrange(mode,scene,game!=nullptr,manualTouch&&screen_override==0);
   if(mode==DS_ONE&&!manualTouch&&game&&!supported){
     arrangement=ds_arrange_one_screen(arrangement,scene,bits,topBlank,fieldValid,fieldMenuFlow);
@@ -412,7 +451,7 @@ void choose_layout() {
     else if(topBlank || (fieldApp&&!(bits&PK_NDS_FIELD_TOUCH_ONLY)))
       arrangement={{},{},false,false,true};
   }
-  if(battleActive && !scene.dark)arrangement={{0,0,512,384},{}};
+  if((battleActive && !scene.dark) || two_screens())arrangement={{0,0,512,384},{}};
   layout=mode==DS_BOTTOM?1:mode==DS_SIDE?2:mode==DS_STACKED?3:0;
   if(scene.hud&&!scene.dark&&!(bits&PK_NDS_FIELD_LOCKED)){std::memcpy(fieldFrame,nds->gpu.framebuffer(0),sizeof fieldFrame);fieldValid=true;++fieldRevision;}
 }
@@ -823,7 +862,7 @@ void draw_quick() {
   submit(quick_stage,512,384);
 }
 // An overlay that draws nothing: while a notice is up, it keeps ds_compose from holding a popup's backdrop (the notice is
-// drawn into stage after it, and a held backdrop would keep it there once it is over).
+// drawn into stage after it, and a held backdrop would keep it there once it is over). The second screen's strip too.
 void keep_composing(uint32_t*){}
 void draw_strip(uint32_t* out){
   const bool moves=drawnBattle.panel==DsBattlePanel::Moves;
@@ -832,6 +871,92 @@ void draw_strip(uint32_t* out){
   const int focus=!moves?battleStrip.actionFocus:pressed&&battleStrip.cancelingMove?4:battleStrip.moveFocus;
   ds_draw_battle_strip(out,*battleStyle,drawnBattle,battleName,focus,battleActive&&!pressed,tick,
                        battlePanelArtValid?battlePanelArt.data():nullptr,pressed);
+}
+void draw_cross(uint32_t* px,int stride,const DsRect& in,int x,int y,int arm){
+  for(int d=-arm;d<=arm;++d){
+    if(in.contains(x+d,y))px[y*stride+x+d]=0xffffff;
+    if(in.contains(x,y+d))px[(y+d)*stride+x]=0xffffff;
+  }
+}
+void draw_second(){
+  constexpr int barH=28,tab=24; // the switch's, at least
+  const bool two=two_screens(),fill=shell.touchFill;
+  pd_second_size(second.w,second.h,two&&!fill?240+barH:240,uiMaxW,uiMaxH,&second.src_w,&second.src_h);
+  const int w=second.src_w,h=second.src_h,bar=two&&!fill?std::max(barH,h-w*192/256):0,room=h-bar;
+  second.panel=nullptr;
+  if(second_companion()){
+    pd_canvas c;pd_canvas_init(&c,w,room,ui_pixels);
+    shell.frame.shoulderHints=secondPad;
+    shell.draw(&c,snapshot,companionGame!=DsGame::Unsupported,map,icons);
+  }else{
+    std::memset(ui_pixels,0,size_t(w)*room*4);
+    const int bw=std::min(w,room*256/192),bh=bw*192/256;
+    second.panel=second_pixels;second.panel_w=256;second.panel_h=192;
+    second.box_x=fill?0:(w-bw)/2;second.box_y=0;second.box_w=fill?w:bw;second.box_h=fill?h:bh;
+  }
+  second.pixels=ui_pixels;second.changed=1;
+  switchBox={};
+  if(!two)return;
+  pd_canvas c;pd_canvas_init(&c,w,h,ui_pixels);
+  if(!fill){
+    std::fill_n(ui_pixels+w*room,w*bar,0u);
+    switchBox={w/2-60,room+(bar-22)/2,120,22};
+    shell.draw_switch(&c,switchBox.x,switchBox.y,switchBox.w,switchBox.h,secondCompanion,secondSwitch);
+    for(int i=w*room;i<w*h;++i)ui_pixels[i]|=0xff000000u;
+    return;
+  }
+  // See-through: the host blends it over the touch screen, the companion is in the same picture.
+  uint32_t tabPixels[tab*tab]{};
+  pd_canvas t;pd_canvas_init(&t,tab,tab,tabPixels);
+  switchBox={w-tab,(h-tab)/2,tab,tab};
+  shell.draw_switch(&t,0,0,tab,tab,secondCompanion,secondSwitch);
+  for(int i=0;i<tab*tab;++i){
+    const uint32_t p=tabPixels[i];
+    uint32_t& d=ui_pixels[(switchBox.y+i/tab)*w+switchBox.x+i%tab];
+    auto mix=[&](int shift){return ((p>>shift&255)*7+(d>>shift&255)*3)/10<<shift;};
+    if(p)d=second.panel?0xb3000000u|p:mix(16)|mix(8)|mix(0);
+  }
+}
+void second_frame(){
+  second.changed=0;
+  // tick stands still while the quick menu is open. A state load leaves this one five short of a read, so a rewind (one
+  // a frame) never reads.
+  const unsigned now=secondTick++;
+  if(second_companion() && now%30==0){refresh();refresh_battle_companion();}
+  if(secondOn && !second_companion() && !repeatedLast){
+    std::memcpy(second_pixels,nds->gpu.framebuffer(1),sizeof second_pixels);
+    if(buttons&(1u<<RETRO_DEVICE_ID_JOYPAD_SELECT))draw_cross(second_pixels,256,{0,0,256,192},cursor_x,cursor_y,2);
+    second.changed=1;
+  }
+  if(secondOn && (now%3==0 || second.ptr_down || second.wheel || secondDown))draw_second();
+  if(!environment || !environment(PD_ENV_SECOND_SCREEN,&second))second.w=second.h=0;
+  const bool on=second.w>0 && second.h>0;
+  if(on!=secondOn){
+    secondOn=on;
+    if(companion || secondPad)leave_second_pad();
+    companion=secondHeld=secondSwitch=shell.frame.shoulderHints=false;
+    drop_second_touch();
+    shell.set_second_screen(on);
+    secondCompanion=shell.bottomCompanion;
+  }
+  // A layout picked by finger, or a screen come or gone, ends a peek at the other screen. controls() does it for the pad's.
+  if(secondRevision!=shell.displayRevision){
+    secondRevision=shell.displayRevision;
+    screen_override=0;manualTouch=false;
+    secondCompanion=two_screens() && (secondCompanion || secondPad);
+  }
+  const bool press=second.ptr_down && !secondDown,onSwitch=switchBox.contains(second.ptr_x,second.ptr_y);
+  secondDown=second.ptr_down;
+  if(press && onSwitch)secondSwitch=secondHeld=true;
+  if(!second.ptr_down){
+    if(secondSwitch && onSwitch)show_companion(!secondCompanion);
+    secondSwitch=secondHeld=false;
+  }
+  if(!second_companion())return;
+  if(second.ptr_down && !secondHeld)shell.touch(second.ptr_x,second.ptr_y,true);
+  else if(secondTouch)shell.touch(second.ptr_x,second.ptr_y,false);
+  secondTouch=second.ptr_down && !secondHeld;
+  if(second.wheel)shell.wheel(second.wheel);
 }
 void present_frame(const void* data);
 void present(const void* data,unsigned,unsigned,size_t) {
@@ -869,7 +994,7 @@ void present_frame(const void* data) {
   const bool showStrip=holdStrip>0 && !scene.dark && arrangement.top.w==512 && wants_strip();
   const double c0=perfOn?perf_now():0;
   ds_compose(stage,arrangement,nds->gpu.framebuffer(0),nds->gpu.framebuffer(1),
-             fieldValid?fieldFrame:nullptr,showStrip?draw_strip:noticeFrames?keep_composing:nullptr,&backdrop,fieldRevision);
+             fieldValid?fieldFrame:nullptr,showStrip?draw_strip:noticeFrames||stripRows?keep_composing:nullptr,&backdrop,fieldRevision);
   stageReady=true;stageMarked=false;
   geometry(w,h);
   if(perfOn)perfCompose+=perf_now()-c0;
@@ -878,10 +1003,7 @@ void present_frame(const void* data) {
     int cx=arrangement.touch.x+cursor_x*arrangement.touch.w/256;
     int cy=arrangement.touch.y+cursor_y*arrangement.touch.h/192;
     stageMarked=true;
-    for(int d=-4;d<=4;++d){
-      if(arrangement.touch.contains(cx+d,cy))stage[cy*w+cx+d]=0xffffff;
-      if(arrangement.touch.contains(cx,cy+d))stage[(cy+d)*w+cx]=0xffffff;
-    }
+    draw_cross(stage,w,arrangement.touch,cx,cy,4);
   }
   const auto& top=arrangement.top;
   if(companionGame!=DsGame::Unsupported && shell.settings.hud && scene.hud && !scene.dark &&
@@ -974,7 +1096,7 @@ void present_frame(const void* data) {
     // x / 255 for x up to 255 * 255, exactly, without a divide.
     auto div255=[](unsigned x){return (x+1+(x>>8))>>8;};
     auto blend=[&](uint32_t p,uint32_t old){
-      const unsigned a=p>>24?p>>24:255;
+      const unsigned a=(p>>24?p>>24:255)>>(secondPad?2:0); // it fades back while the buttons are on the second screen
       if(a==255)return p&0xffffff;
       const unsigned r=div255(((p>>16)&255)*a+((old>>16)&255)*(255-a));
       const unsigned g=div255(((p>>8)&255)*a+((old>>8)&255)*(255-a));
@@ -1007,18 +1129,27 @@ void present_frame(const void* data) {
   // A notice goes over everything (a floating popup's dim, DS_BOTTOM's touch screen, the HUD), and marks the stage: the
   // quick menu composes it again before it opens over it.
   if(noticeFrames){draw_notice(stage);stageMarked=true;}
-  presentedField=true;
+  stripRows=hud_strip_step(stripRows,secondPad);
+  if(stripRows){
+    pd_canvas c;pd_canvas_init(&c,w,h,stage);
+    hud_strip_draw(&c,0,0,w,h,2,stripRows,tick);
+    stageMarked=true;
+  }
+  presentedField=!stripRows;
   presentedArrangement=arrangement;
   submit(stage,w,h);
 }
+int16_t pen_axis(unsigned id,int x,int y){
+  return id==RETRO_DEVICE_ID_POINTER_X?(x*65535+255)/256-32767:(y*32768+191)/192;
+}
 int16_t filtered_input(unsigned p,unsigned d,unsigned i,unsigned id) {
+  const bool axis=id==RETRO_DEVICE_ID_POINTER_X || id==RETRO_DEVICE_ID_POINTER_Y;
   if(flyCallJob)return 0;
   if(flyJob.active()){
     if(d==RETRO_DEVICE_JOYPAD)return id<16&&!!(flyJob.key&(1u<<id));
     if(d==RETRO_DEVICE_POINTER){
       if(id==RETRO_DEVICE_ID_POINTER_PRESSED)return flyJob.tapFrames>2;
-      if(id==RETRO_DEVICE_ID_POINTER_X)return (flyJob.x*65535+255)/256-32767;
-      if(id==RETRO_DEVICE_ID_POINTER_Y)return (flyJob.y*32768+191)/192;
+      if(axis)return pen_axis(id,flyJob.x,flyJob.y);
     }
     return 0;
   }
@@ -1027,7 +1158,7 @@ int16_t filtered_input(unsigned p,unsigned d,unsigned i,unsigned id) {
     if(id<16 && (hudConsumed&(1u<<id)))return 0;
     if(id==RETRO_DEVICE_ID_JOYPAD_A&&heldQuickConfirm)return 0;
     if(id==RETRO_DEVICE_ID_JOYPAD_SELECT && select_pulse)return 1;
-    if(companion || quickOpen || (buttons&(1u<<RETRO_DEVICE_ID_JOYPAD_SELECT)))return 0;
+    if(companion || secondPad || quickOpen || (buttons&(1u<<RETRO_DEVICE_ID_JOYPAD_SELECT)))return 0;
     if(id<16 && (battleHeld&(1u<<id)))return 0;
     if(id==shell.companion_id() || int(id)==shell.screen_id())return 0;
     if(p==0 && id==RETRO_DEVICE_ID_JOYPAD_B && autoRunThisFrame)return !input(p,d,i,id);
@@ -1039,22 +1170,24 @@ int16_t filtered_input(unsigned p,unsigned d,unsigned i,unsigned id) {
       if(!input(p,d,i,RETRO_DEVICE_ID_POINTER_PRESSED))compDimHeld=false;
       return 0;
     }
+    const DsRect box{second.box_x,second.box_y,second.box_w,second.box_h};
+    if(secondOn && second.panel && !secondHeld && second.ptr_down && box.contains(second.ptr_x,second.ptr_y)){
+      if(id==RETRO_DEVICE_ID_POINTER_PRESSED)return 1;
+      if(axis)return pen_axis(id,(second.ptr_x-box.x)*256/box.w,(second.ptr_y-box.y)*192/box.h);
+    }
     bool stylus=buttons&(1u<<RETRO_DEVICE_ID_JOYPAD_SELECT);
     if(stylus) {
       if(id==RETRO_DEVICE_ID_POINTER_PRESSED)return !!(buttons&(1u<<RETRO_DEVICE_ID_JOYPAD_A));
-      if(id==RETRO_DEVICE_ID_POINTER_X)return (cursor_x*65535+255)/256-32767;
-      if(id==RETRO_DEVICE_ID_POINTER_Y)return (cursor_y*32768+191)/192;
+      if(axis)return pen_axis(id,cursor_x,cursor_y);
     }
     if(injectBattleTap) {
       if(id==RETRO_DEVICE_ID_POINTER_PRESSED)return battleTap.down;
-      if(id==RETRO_DEVICE_ID_POINTER_X)return (battleTap.x*65535+255)/256-32767;
-      if(id==RETRO_DEVICE_ID_POINTER_Y)return (battleTap.y*32768+191)/192;
+      if(axis)return pen_axis(id,battleTap.x,battleTap.y);
     }
     int x=input(p,d,i,RETRO_DEVICE_ID_POINTER_X),y=input(p,d,i,RETRO_DEVICE_ID_POINTER_Y);
     auto pen=ds_pen(arrangement,(x+32767)*512/65535,(y+32767)*384/65535);
     if(id==RETRO_DEVICE_ID_POINTER_PRESSED)return pen.valid?input(p,d,i,id):0;
-    if(id==RETRO_DEVICE_ID_POINTER_X)return pen.valid?(pen.x*65535+255)/256-32767:0;
-    if(id==RETRO_DEVICE_ID_POINTER_Y)return pen.valid?(pen.y*32768+191)/192:0;
+    if(axis)return pen.valid?pen_axis(id,pen.x,pen.y):0;
   }
   return input(p,d,i,id);
 }
@@ -1086,9 +1219,16 @@ void hud_open_target(int id) {
     shell.frame.tab=PD_TAB_BAG;
     shell.pocket=shell.scroll=0;
   }else return;
-  companion=true;
+  open_companion();
 }
 
+// A tap on the strip, kept from the game until it's lifted.
+bool strip_tapped(){
+  const int y=(input(0,RETRO_DEVICE_POINTER,0,RETRO_DEVICE_ID_POINTER_Y)+32767)*384/65535;
+  if(!input(0,RETRO_DEVICE_POINTER,0,RETRO_DEVICE_ID_POINTER_PRESSED) || !hud_strip_hit(0,384,2,stripRows,y))return false;
+  compDimHeld=true;
+  return true;
+}
 void controls() {
   buttons=0;for(unsigned id=0;id<16;++id)if(input(0,RETRO_DEVICE_JOYPAD,0,id))buttons|=1u<<id;
   hudConsumed&=buttons;
@@ -1098,7 +1238,7 @@ void controls() {
   unsigned edge=buttons&~old_buttons;old_buttons=buttons;
   for(unsigned id=RETRO_DEVICE_ID_JOYPAD_UP;id<=RETRO_DEVICE_ID_JOYPAD_RIGHT;++id){
     held_frames[id]=(buttons&(1u<<id))?held_frames[id]+1:0;
-    if((companion || quickOpen || hudCursor>=0) && held_frames[id]>15 && (held_frames[id]-15)%5==0)edge|=1u<<id;
+    if((companion || secondPad || quickOpen || hudCursor>=0) && held_frames[id]>15 && (held_frames[id]-15)%5==0)edge|=1u<<id;
   }
   auto hit=[&](unsigned id){return !!(edge&(1u<<id));};
   heldQuickConfirm&=!!(buttons&(1u<<RETRO_DEVICE_ID_JOYPAD_A));
@@ -1111,7 +1251,7 @@ void controls() {
   // companion and hold for the quick menu.
   if(hit(RETRO_DEVICE_ID_JOYPAD_L3)){
     if(quickOpen){quickOpen=false;repelPicker=flyPicker=false;return;}
-    if(!companion){
+    if(!companion && !secondPad){
       hudCursor=-1;quickOpen=true;quickSelected=0;companionHold=0;repelPicker=flyPicker=false;flyWhy=nullptr;refresh();return;
     }
   }
@@ -1131,7 +1271,7 @@ void controls() {
     }
     return;
   }
-  if(!companion && !quickOpen && hudButton>=0 && hit(hudButton) && hudHits.n &&
+  if(!companion && !secondPad && !quickOpen && hudButton>=0 && hit(hudButton) && hudHits.n &&
      !(buttons&(1u<<RETRO_DEVICE_ID_JOYPAD_SELECT)) && field_free()){
     hudCursor=hud_first(&hudHits);
     hudConsumed|=1u<<hudButton;
@@ -1145,7 +1285,7 @@ void controls() {
   const bool companionTap=!companionDown&&companionHold>0;
   if(!companionDown)companionHold=0;
   else if(companionHold>=0)++companionHold;
-  if(!companion && companionHold>0 && (selectDown || (!quickOpen&&companionHold>=24))){
+  if(!companion && !secondPad && companionHold>0 && (selectDown || (!quickOpen&&companionHold>=24))){
     quickOpen=!quickOpen;repelPicker=flyPicker=false;select_used=selectDown;quickSelected=0;companionHold=-1;
     if(quickOpen){flyWhy=nullptr;refresh();}
     return;
@@ -1193,7 +1333,7 @@ void controls() {
         hudConsumed|=buttons;
       }
       else{
-        refresh();refresh_battle_companion();companion=true;
+        refresh();refresh_battle_companion();open_companion();
         shell.mapX=snapshot.mapX;shell.mapY=snapshot.mapY;
       }
       quickOpen=false;
@@ -1201,11 +1341,14 @@ void controls() {
     return;
   }
   if(companionTap) {
-    companion=!companion;
-    if(companion){refresh();refresh_battle_companion();shell.mapX=snapshot.mapX;shell.mapY=snapshot.mapY;}
+    if(companion || secondPad)close_companion();
+    else open_companion();
+    if(companion||secondPad){refresh();refresh_battle_companion();shell.mapX=snapshot.mapX;shell.mapY=snapshot.mapY;}
   }
-  if(!companion) {
-    if(stylusChord && hit(RETRO_DEVICE_ID_JOYPAD_Y)){
+  if(!companion && !secondPad) {
+    if(two_screens() && (stylusChord || (shell.screen_id()>=0 && hit(shell.screen_id())))){
+      select_used|=selectDown; // both screens are in view: nothing to switch
+    }else if(stylusChord && hit(RETRO_DEVICE_ID_JOYPAD_Y)){
       manualTouch=!manualTouch;screen_override=0;select_used=true;
     }else if(shell.screen_id()>=0 && hit(shell.screen_id())){
       if(buttons&(1u<<RETRO_DEVICE_ID_JOYPAD_SELECT)){
@@ -1223,8 +1366,8 @@ void controls() {
         (1u<<RETRO_DEVICE_ID_JOYPAD_LEFT)|(1u<<RETRO_DEVICE_ID_JOYPAD_RIGHT)|(1u<<RETRO_DEVICE_ID_JOYPAD_A);
       if(buttons&pen_keys){
         select_used=true;
-        if(arrangement.touch.w==0){
-          if(shell.layout==DS_ONE||shell.layout==DS_PIP){manualTouch=true;screen_override=0;}
+        if(arrangement.touch.w==0 && !two_screens()){
+          if(shell.shown_layout()==DS_ONE||shell.shown_layout()==DS_PIP){manualTouch=true;screen_override=0;}
           else screen_override=1;
         }
       }
@@ -1232,7 +1375,8 @@ void controls() {
     return;
   }
   unsigned previous_layout=shell.displayRevision;
-  if(shell.control(edge) && (!shell.frame.moreOpened || !pd_ui_back(&shell.frame)))companion=false;
+  if(secondPad && (hit(RETRO_DEVICE_ID_JOYPAD_START) || strip_tapped()))close_companion();
+  else if(shell.control(edge) && (!shell.frame.moreOpened || !pd_ui_back(&shell.frame)))close_companion();
   if(shell.displayRevision!=previous_layout){screen_override=0;manualTouch=false;}
 
 }
@@ -1304,6 +1448,8 @@ RETRO_API bool retro_load_game(const retro_game_info* info){
   }
   // Only a host that says it draws it (PD_ENV_PROBE): a frontend answering every private command true showed nothing.
   {pd_companion ask{};ask.active=PD_ENV_PROBE;pd_ds::companionHost=pd_ds::environment && pd_ds::environment(PD_ENV_SET_COMPANION,&ask) && ask.active==1;}
+  pd_ds::second={};pd_ds::switchBox={};pd_ds::stripRows=0;
+  pd_ds::secondOn=pd_ds::secondCompanion=pd_ds::secondTouch=pd_ds::secondHeld=pd_ds::secondPad=pd_ds::secondSwitch=pd_ds::secondDown=false;
   pd_ds::choose_companion_canvas();
   const auto old_layout=opt("pokedaisy_ds_layout");
   pd_ds::shell.init(dir(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY),
@@ -1316,7 +1462,7 @@ RETRO_API bool retro_load_game(const retro_game_info* info){
 }
 RETRO_API void retro_reset(){
   pd_ds::clear_battle();pd_ds::reset_skip();pd_ds::noticeFrames=0;
-  ds_reset();pd_ds::clear_hud_focus();pd_ds::stageReady=false;pd_ds::clear_field_actions();pd_ds::flyJob={};pd_ds::flyPicker=pd_ds::heldQuickConfirm=false;pd_ds::companion=pd_ds::quickOpen=false;pd_ds::shell.picker=-1;pd_ds::shell.summary=false;pd_ds::shell.details=false;pd_ds::shell.dexEntry=0;pd_ds::shell.guideLoadedPage=-1;pd_ui_guide_reset(&pd_ds::shell.frame);pd_ds::shell.placeRow=pd_ds::shell.mapAction=-1;pd_ds::screen_override=0;pd_ds::snapshot={};pd_ds::repelFull=0;pd_ds::tick=0;pd_ds::scene.reset();pd_ds::arrangement={};pd_ds::manualTouch=pd_ds::fieldValid=pd_ds::fieldMenuFlow=false;pd_ds::companionHold=0;
+  ds_reset();pd_ds::clear_hud_focus();pd_ds::stageReady=false;pd_ds::clear_field_actions();pd_ds::flyJob={};pd_ds::flyPicker=pd_ds::heldQuickConfirm=false;pd_ds::companion=pd_ds::secondPad=pd_ds::quickOpen=false;pd_ds::secondTick=25;pd_ds::shell.picker=-1;pd_ds::shell.summary=false;pd_ds::shell.details=false;pd_ds::shell.dexEntry=0;pd_ds::shell.guideLoadedPage=-1;pd_ui_guide_reset(&pd_ds::shell.frame);pd_ds::shell.placeRow=pd_ds::shell.mapAction=-1;pd_ds::screen_override=0;pd_ds::snapshot={};pd_ds::repelFull=0;pd_ds::tick=0;pd_ds::scene.reset();pd_ds::arrangement={};pd_ds::manualTouch=pd_ds::fieldValid=pd_ds::fieldMenuFlow=false;pd_ds::companionHold=0;
 }
 RETRO_API bool retro_unserialize(const void* data,size_t n){
   pd_ds::clear_battle();
@@ -1334,7 +1480,7 @@ RETRO_API bool retro_unserialize(const void* data,size_t n){
     if(sram.data()!=frontendSave)log(RETRO_LOG_WARN,"PokeDaisy DS: the save buffer moved on a state load\n");
   }
   if(ok){pd_ds::reset_skip();pd_ds::noticeFrames=0;pd_ds::shell.battle={};pd_ds::shell.update_battle();pd_ds::stageReady=false;pd_ds::restoreGrace=4;pd_ds::set_wild_rates();}
-  if(ok){pd_ds::clear_hud_focus();pd_ds::clear_field_actions();pd_ds::flyJob={};pd_ds::flyPicker=pd_ds::heldQuickConfirm=false;pd_ds::companion=pd_ds::quickOpen=false;pd_ds::shell.picker=-1;pd_ds::shell.summary=false;pd_ds::shell.details=false;pd_ds::shell.dexEntry=0;pd_ds::shell.guideLoadedPage=-1;pd_ui_guide_reset(&pd_ds::shell.frame);pd_ds::shell.placeRow=pd_ds::shell.mapAction=-1;pd_ds::screen_override=0;pd_ds::snapshot={};pd_ds::repelFull=0;pd_ds::tick=0;pd_ds::scene.reset();pd_ds::arrangement={};pd_ds::manualTouch=pd_ds::fieldValid=pd_ds::fieldMenuFlow=false;pd_ds::companionHold=0;}
+  if(ok){pd_ds::clear_hud_focus();pd_ds::clear_field_actions();pd_ds::flyJob={};pd_ds::flyPicker=pd_ds::heldQuickConfirm=false;pd_ds::companion=pd_ds::secondPad=pd_ds::quickOpen=false;pd_ds::secondTick=25;pd_ds::shell.picker=-1;pd_ds::shell.summary=false;pd_ds::shell.details=false;pd_ds::shell.dexEntry=0;pd_ds::shell.guideLoadedPage=-1;pd_ui_guide_reset(&pd_ds::shell.frame);pd_ds::shell.placeRow=pd_ds::shell.mapAction=-1;pd_ds::screen_override=0;pd_ds::snapshot={};pd_ds::repelFull=0;pd_ds::tick=0;pd_ds::scene.reset();pd_ds::arrangement={};pd_ds::manualTouch=pd_ds::fieldValid=pd_ds::fieldMenuFlow=false;pd_ds::companionHold=0;}
   return ok;
 }
 RETRO_API void retro_unload_game(){ds_unload_game();pd_ds::clear();}
@@ -1350,7 +1496,7 @@ RETRO_API void retro_run(){
       pd_ds::shell.set_front_rows(front.count,front.label,front.value,front.group);
       if(front.open_settings){
         pd_ds::refresh();
-        pd_ds::companion=true;pd_ds::quickOpen=false;pd_ds::clear_hud_focus();
+        pd_ds::open_companion();pd_ds::quickOpen=false;pd_ds::clear_hud_focus();
         pd_ds::shell.open_front_rows();
         // The A that picked the host menu's SETTINGS is still down: not a press on the row the companion opens at.
         pd_ds::old_buttons=0;
@@ -1359,7 +1505,7 @@ RETRO_API void retro_run(){
     }
   }
   const unsigned previous=pd_ds::old_buttons;
-  const bool menuWasOpen=pd_ds::companion || pd_ds::quickOpen || pd_ds::hudCursor>=0;
+  const bool menuWasOpen=pd_ds::companion || pd_ds::secondPad || pd_ds::quickOpen || pd_ds::hudCursor>=0;
   pd_ds::controls();
   const int field=pk_nds_field_state(pd_ds::game,pd_ds::read32,nullptr,0);
   if(pd_ds::shell.frame.battleWasOn && !(field&PK_NDS_FIELD_BATTLE)){
@@ -1402,6 +1548,7 @@ RETRO_API void retro_run(){
     pd_ds::swallowMenuInput=false;
     ++pd_ds::tick;
   }
+  pd_ds::second_frame();
   // Once a frame, whichever way it was drawn (the quick menu, the companion, a frame DSperate skipped).
   if(pd_ds::noticeFrames)--pd_ds::noticeFrames;
 }

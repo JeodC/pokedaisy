@@ -8,11 +8,16 @@ extern "C" {
 #include "pd_settings.h"
 }
 struct DsCompanionUi {
-  enum Row { Layout, Battles, Hud, CompanionButton, ScreenButton, PenSpeed, QuickStyle, Reset, BattleStrip, HudMinimal, HudBalls, HudRepel, HudMap, DarkMode, AutoRun, TabBar, MoreTabs, HudButton, HudSize, Aspect, Zoom, AutoZoom, FontType, Rows };
+  enum Row { Layout, Battles, Hud, CompanionButton, ScreenButton, PenSpeed, QuickStyle, Reset, BattleStrip, HudMinimal, HudBalls, HudRepel, HudMap, DarkMode, AutoRun, TabBar, MoreTabs, HudButton, HudSize, Aspect, Zoom, AutoZoom, FontType, TouchScreen, Rows };
   pd_settings settings{};
   // A host whose picture can EXPAND (the Windows core): its SETTINGS gain ASPECT, ZOOM and AUTO ZOOM IN, and it lays the
   // game out for settings.aspect / settings.zoom (the app's SETTINGS > SCREEN). Off: the DS layouts alone.
   bool hasExpand=false;
+  bool secondScreen=false;
+  // DS LAYOUT is another choice with a second screen, TWO SCREENS to start with.
+  int shown_layout() const{return secondScreen?layoutTwo:layout;}
+  void set_second_screen(bool on);
+  void draw_switch(pd_canvas*,int x,int y,int w,int h,bool onCompanion,bool pressed);
   // The frontend's own settings (the desktop host's A/B BUTTONS, FF SPEED, KEYBOARD ...: PD_ENV_FRONT_ROWS), at the end of
   // SETTINGS as rows Rows + i, so every setting is in one place. set_front_rows each frame; a press is taken by
   // take_front_press (-1 none) and handed back to the frontend; open_front_rows puts SETTINGS on the first of them.
@@ -32,8 +37,8 @@ struct DsCompanionUi {
   int backdropX=0, backdropY=0;
   pd_snapshot battle{};
   unsigned displayRevision=0;
-  int layout=0, autoBattles=1, companionButton=0, screenButton=1, penSpeed=1;
-  bool battleStrip=true,hudMinimal=false,darkMode=false,autoRun=false;
+  int layout=0, layoutTwo=0, autoBattles=1, companionButton=0, screenButton=1, penSpeed=1;
+  bool battleStrip=true,hudMinimal=false,darkMode=false,autoRun=false,touchFill=false,bottomCompanion=false;
   int selected=0,page=0,scroll=0,pocket=0,filter=0,mapX=0,mapY=0;
   int learnRow=0, learnLast=0;
   bool summary=false,details=false;
@@ -62,6 +67,7 @@ struct DsCompanionUi {
   // A pointer (the Windows core's mouse): down / held / up at (x, y) on the companion's canvas, in its own pixels. A tap
   // runs the tab, row, button or gear under it as A would; a drag on a list moves it. True while the companion takes it.
   bool touch(int x, int y, bool down);
+  void cancel_touch();
   // The wheel, in notches (>0 down): the open tab's list moves as UP / DOWN would.
   void wheel(int notches);
   unsigned companion_id() const;
@@ -71,9 +77,9 @@ struct DsCompanionUi {
 private:
   std::vector<ds_touch_hit> hits; // what the last draw laid out, for the pointer
   size_t overlayHits=0;           // where the choice windows' own targets start in it
-  int tapX=0, tapY=0, tapId=-1, placeFirst=0;
+  int tapX=0, tapY=0, tapId=-1, placeFirst=0, dragY=0;
   pd_map_viewport mapView{};   // where the MAP tab drew the map last, for a click on it
-  bool tapHeld=false, tapFrame=false, tapWindow=false, tapClose=false;
+  bool tapHeld=false, tapFrame=false, tapWindow=false, tapClose=false, dragging=false;
   pd_tab tapTab=PD_TAB_PARTY;
   int tap_at(int x, int y) const;
   void tap_act(int id);
@@ -91,5 +97,6 @@ private:
   void draw_body(pd_ui*,pd_canvas*);
   void draw_settings(pd_canvas*);
   int value(int row) const;
+  int choice_count(int row) const;
   void apply(int row,int value);
 };

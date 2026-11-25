@@ -372,9 +372,12 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
     if (ui->optionSource) {
         const int n = ui->optionSource->count, view = listBottom - listTop;
         const int selected = ui->optionSelected;
-        if (selected >= infoCount && selected < n)
+        int first = infoCount;
+        while (first < n && ui->optionSource->rows[first].heading) first++;
+        if (selected >= infoCount && selected < n && selected != ui->optionFollowed)
             ui->settingsScroll = ui_settings_follow(ui->settingsScroll,
-                selected == infoCount ? 0 : selected * ROW_H + separator, view);
+                selected <= first ? 0 : selected * ROW_H + separator, view);
+        ui->optionFollowed = selected;
         ui->settingsScroll = ui_clamp_scroll(ui->settingsScroll, totalOptions, view);
         pd_clip(c, x + lf, listTop, w - 2 * lf, view);
         if (separator) pd_fill(c, ix, listTop + infoCount * ROW_H - ui->settingsScroll + 1, iw, 1, PD_DIVIDER);

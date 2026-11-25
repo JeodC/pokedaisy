@@ -249,7 +249,7 @@ The game list speaks the language you pick in the companion's `SETTINGS` > `LANG
 The header's first button opens `SORT BY`: `NAME`, `LAST PLAYED` or `DATE ADDED`; favorites always come first. A game
 that turned up in the last day carries a green `NEW` tag (the games already there the first time aren't tagged).
 `SETTINGS` holds `DARK MODE`, `THEME` and `ASPECT` (shared with the companion in your games) and the program's own
-`LCD FILTER`, `FF SPEED`, `REWIND`, [`SHARED SAVES`](#moving-a-save-you-already-have) and `A/B BUTTONS`. `BUTTON COLORS`
+`LCD FILTER`, [`SECOND SCREEN`](#two-screens), `FF SPEED`, `REWIND`, [`SHARED SAVES`](#moving-a-save-you-already-have) and `A/B BUTTONS`. `BUTTON COLORS`
 paints the button legend like your device's buttons: `RED A` (the app's colours) or `GREEN A` (green A, red B, blue X,
 yellow Y). `TOOLS` lists the save tools that are coming to this version.
 
@@ -294,6 +294,33 @@ with the next save you make.
 Before a game opens, PokeDaisy backs its save up into `saves/pokedaisy-backups` and keeps the newest 10 copies.
 Save states are in `states` and belong to the core that made them: a GBA state from another emulator, or from the
 other core, won't load.
+
+## Two screens
+
+On a dual-screen handheld, the companion goes on the second screen and stays there while you play on the first. Touch it,
+or press X (`COMPANION BUTTON`) while you walk around and your buttons move to it. A silver strip slides up along the bottom
+of the game with an arrow pointing at the companion, and `L` and `R` show at the ends of its tab bar. The game keeps running
+but doesn't see your buttons:
+
+- The D-pad moves the cursor and A picks what it's on. L and R move between the tabs.
+- B goes back, and when there's nothing left to go back from, it gives your buttons back to the game.
+- X or START give them back from anywhere. So does a tap on the strip.
+
+They also come back by themselves when a battle starts or the game opens a screen of its own. In a text box, a menu or a
+battle X doesn't take them, but you can still touch the companion.
+
+A DS game has its top screen on the first screen and its touch screen on the second, with your finger as the stylus. Tap
+`COMPANION` under the touch screen and the companion takes its place. `GAME SCREEN` in the same spot brings the touch screen
+back, and PokeDaisy remembers which of the two you had. L2 switches them too and your buttons go with it. B with nothing
+left to go back from, or START, brings back the touch screen and your buttons.
+
+Set `DS TOUCH SCREEN` to `STRETCH` and the touch screen fills the second screen. The switch is then a small tab on the right
+edge, halfway down. All of this is `DS LAYOUT`'s `TWO SCREENS`. Any other layout has both of the DS's screens on the first
+one and the companion always on the second.
+
+`SECOND SCREEN`, in the game list's `SETTINGS` or the companion's, turns it on or off. It starts on where the firmware
+says the device has two screens (ROCKNIX does), and off on a computer with two monitors. With one screen the row isn't
+there. It has been tried on an AYN Thor and an Anbernic RG DS, both running ROCKNIX. DS games on Windows don't use it yet.
 
 ## Controls
 
@@ -360,8 +387,8 @@ pauses while it's open.
 | `QUIT` | Leave the game (`QUIT TO GAME LIST` when you picked it from the list). It asks first. |
 
 Every setting is in one place, the companion's `SETTINGS`, in the same groups and order as on Android. The program's
-own rows sit in those groups too: `FF SPEED` and `REWIND` under `FF / SPEED`, `LCD FILTER` under `SCREEN`, and
-`A/B BUTTONS`, `KEYBOARD` and `HOTKEYS` under `CONTROLS`:
+own rows sit in those groups too: `FF SPEED` and `REWIND` under `FF / SPEED`, `LCD FILTER` and `SECOND SCREEN` under
+`SCREEN`, and `A/B BUTTONS`, `KEYBOARD` and `HOTKEYS` under `CONTROLS`:
 
 | Row | What it does |
 | --- | --- |
@@ -369,6 +396,7 @@ own rows sit in those groups too: `FF SPEED` and `REWIND` under `FF / SPEED`, `L
 | `FF SPEED` | How fast fast-forward goes: `MAX`, or 2x to 8x. |
 | `REWIND` | `ON` keeps the last 20 seconds or so to rewind through. |
 | `LCD FILTER` | A screen texture like a handheld's. |
+| `SECOND SCREEN` | `ON` uses your second screen, where there's one. See [Two screens](#two-screens). |
 | `KEYBOARD` | Which key does what (below). Opens its page over the game; B goes back to `SETTINGS`. |
 | `HOTKEYS` | Buttons for fast-forward, rewind and states (below). Opens its page the same way. |
 
@@ -414,6 +442,7 @@ The program reads a few settings from the environment:
 
 - `POCKET_FULLSCREEN=1` fills the screen.
 - `POCKET_WINDOW=1280x800` opens a window of that size, to try a handheld's screen on a PC.
+- `POCKET_SECOND_SCREEN=1240x1080` opens a window of that size as the second screen, to try one on a PC.
 - `POCKET_ROM_DIRS` adds folders to the game list, separated by colons.
 - `POCKET_SAVE_DIRS` gives each of those folders a save folder for `SHARED SAVES`, in the same order, instead of looking
   in RetroArch's settings. Leave one empty to keep its saves in PokeDaisy.

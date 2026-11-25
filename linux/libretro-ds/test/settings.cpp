@@ -1,5 +1,6 @@
 // Settings changes go through real controller navigation and shared rendering.
 #include "companion_ui.h"
+#include "layout.h"
 #include "libretro.h"
 extern "C" {
 #include "../../hud.h"
@@ -38,6 +39,31 @@ int main(int argc,char** argv){
   press(ui,RETRO_DEVICE_ID_JOYPAD_DOWN);draw();ppm((std::string(argv[2])+"/layout-picker.ppm").c_str(),px);
   press(ui,RETRO_DEVICE_ID_JOYPAD_DOWN);press(ui,RETRO_DEVICE_ID_JOYPAD_DOWN);
   press(ui,RETRO_DEVICE_ID_JOYPAD_A);assert(ui.layout==3 && ui.picker==-1);
+  // With a second screen the layout is another choice, TWO SCREENS to start with. Without one it isn't offered.
+  ui.set_second_screen(true);assert(ui.shown_layout()==DS_TWO);
+  press(ui,RETRO_DEVICE_ID_JOYPAD_DOWN);assert(ui.setting==DsCompanionUi::TouchScreen);
+  press(ui,RETRO_DEVICE_ID_JOYPAD_A);press(ui,RETRO_DEVICE_ID_JOYPAD_DOWN);press(ui,RETRO_DEVICE_ID_JOYPAD_A);assert(ui.touchFill);
+  press(ui,RETRO_DEVICE_ID_JOYPAD_UP);
+  press(ui,RETRO_DEVICE_ID_JOYPAD_A);assert(ui.choice==DS_TWO);
+  press(ui,RETRO_DEVICE_ID_JOYPAD_UP);press(ui,RETRO_DEVICE_ID_JOYPAD_A);
+  assert(ui.shown_layout()==DS_PIP && ui.layout==3);
+  {DsCompanionUi again;again.init(path);again.set_second_screen(true);assert(again.shown_layout()==DS_PIP && again.layout==3 && again.touchFill);}
+  ui.set_second_screen(false);assert(ui.shown_layout()==3);
+  press(ui,RETRO_DEVICE_ID_JOYPAD_A);for(int i=0;i<9;++i)press(ui,RETRO_DEVICE_ID_JOYPAD_DOWN);
+  assert(ui.choice==DS_PIP);press(ui,RETRO_DEVICE_ID_JOYPAD_B);
+  // A finger drags the list, to its end and back to its very top, and lifting it there picks nothing.
+  draw();
+  auto drag=[&](int from,int to){for(int y=from;y!=to;y+=to>from?10:-10){ui.touch(100,y,true);draw();}ui.touch(100,to,false);draw();};
+  for(int i=0;i<4;++i)drag(200,60);
+  const auto bottom=px;assert(ui.options.settingsScroll>0);
+  for(int i=0;i<4;++i)drag(60,200);
+  assert(ui.options.settingsScroll==0 && ui.setting==DsCompanionUi::Layout && ui.picker==-1 && px!=bottom);
+  ui.wheel(-1);assert(ui.setting==DsCompanionUi::Hud);ui.wheel(1);assert(ui.setting==DsCompanionUi::Layout);
+  // A press taken back picks nothing when the finger is lifted.
+  int row=0;
+  for(int y=40;y<240 && !row;y+=4){ui.touch(100,y,true);ui.touch(100,y,false);if(ui.picker==DsCompanionUi::Layout)row=y;}
+  assert(row);ui.picker=-1;ui.autoRun=false;draw();
+  ui.touch(100,row,true);ui.cancel_touch();ui.touch(100,row,false);assert(ui.setting==DsCompanionUi::Layout && ui.picker==-1);
   // Cancel does not apply a highlighted choice.
   press(ui,RETRO_DEVICE_ID_JOYPAD_A);press(ui,RETRO_DEVICE_ID_JOYPAD_UP);press(ui,RETRO_DEVICE_ID_JOYPAD_B);assert(ui.layout==3);
   press(ui,RETRO_DEVICE_ID_JOYPAD_DOWN);assert(ui.setting==DsCompanionUi::Hud);

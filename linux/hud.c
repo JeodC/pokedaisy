@@ -9,6 +9,7 @@
 #include "pd_map.h"
 #include "pd_style.h"
 #include "pd_tables.h"
+#include "pd_tr.h"
 #include "quick_menu.h"
 #include <stdio.h>
 #include <string.h>
@@ -1282,6 +1283,42 @@ uint32_t hud_key(const struct pd_game *g, const struct pd_snapshot *s, const str
   }
 #undef MIX
   return k;
+}
+
+int hud_strip_step(int shown, bool up) {
+  shown += up ? 2 : -2;
+  return shown < 0 ? 0 : shown > HUD_STRIP_ROWS ? HUD_STRIP_ROWS : shown;
+}
+
+bool hud_strip_hit(int y, int h, int k, int shown, int ty) { return ty < y + h && ty >= y + h - shown * k; }
+
+void hud_strip_draw(struct pd_canvas *c, int x, int y, int w, int h, int k, int shown, int tick) {
+  static const int arrow[] = {17, 15, 13, 11, 9, 7, 5, 3, 1};
+  const int t = tick % 58, bob = t < 5 ? 0 : t < 11 ? 1 : t < 16 ? 2 : t < 27 ? 3 : t < 32 ? 2 : t < 38 ? 1 : 0;
+  const int top = y + h - shown * k, body = HUD_STRIP_ROWS - 3;
+  pd_clip(c, x, y, w, h);
+  pd_fill(c, x, top, w, k, 0x6C7080);
+  pd_fill(c, x, top + k, w, k, 0xFAFAFE);
+  for (int i = 0; i < body; i++)
+    pd_fill(c, x, top + (2 + i) * k, w, k, mix_color(0xE4E6EC, 0xA6AAB6, (unsigned)(i * 100 / (body - 1))));
+  pd_fill(c, x, top + (HUD_STRIP_ROWS - 1) * k, w, k, 0x878B98);
+  for (int shadow = 1; shadow >= 0; shadow--)
+    for (int i = 0; i < 9; i++)
+      pd_fill(c, x + (w - arrow[i] * k) / 2, top + (5 + bob + i + shadow) * k, arrow[i] * k, k, shadow ? 0xFAFAFB : 0x454957);
+  pd_unclip(c);
+}
+
+// A DS's second screen's switch (NdsBottomScreen.kt): a button, or a [tab] at the screen's edge.
+void hud_switch_draw(struct pd_canvas *c, int x, int y, int w, int h, bool tab, bool onCompanion, bool pressed) {
+  const uint32_t ink = pd_chip_text(pressed);
+  pd_chip_face(c, x, y, w, h, pressed);
+  if (tab) {
+    pd_triangle(c, x + (w - 5) / 2, y + (h - 9) / 2, 5, onCompanion ? PD_RIGHT : PD_LEFT, ink);
+    return;
+  }
+  const char *label = pd_tr(onCompanion ? "GAME SCREEN" : "COMPANION");
+  const int tw = pd_text_width(label) < w - 4 ? pd_text_width(label) : w - 4;
+  pd_text_fit(c, x + (w - tw) / 2, pd_text_y(y, h), tw, label, ink, pd_chip_shadow(pressed));
 }
 
 int hud_repel_full(int steps) { return steps <= 100 ? 100 : steps <= 200 ? 200 : 250; }

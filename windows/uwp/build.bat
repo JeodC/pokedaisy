@@ -78,6 +78,8 @@ rem The host's own sources, then every part of the companion the library draws w
 > "%OBJ%\sources.rsp" echo "%ROOT%\linux\main.c"
 >> "%OBJ%\sources.rsp" echo "%ROOT%\linux\library.c"
 >> "%OBJ%\sources.rsp" echo "%ROOT%\linux\cover_png.c"
+>> "%OBJ%\sources.rsp" echo "%ROOT%\linux\display_filter.c"
+>> "%OBJ%\sources.rsp" echo "%ROOT%\linux\second_screen.c"
 >> "%OBJ%\sources.rsp" echo "%ROOT%\3ds\desktop\pd_png.c"
 >> "%OBJ%\sources.rsp" echo "%ROOT%\third_party\zlib\contrib\puff\puff.c"
 for %%f in ("%ROOT%\3ds\core\*.c") do if not "%%~nxf"=="pd_guide_gen.c" >> "%OBJ%\sources.rsp" echo "%%~f"

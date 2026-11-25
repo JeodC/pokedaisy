@@ -15,7 +15,7 @@ struct DsRect {
   bool contains(int px,int py)const{return w>0&&h>0&&px>=x&&py>=y&&px<x+w&&py<y+h;}
 };
 // Saved settings keep their old IDs: AUTO becomes ONE SCREEN; append new modes.
-enum DsLayout { DS_ONE=0,DS_TOP=1,DS_BOTTOM=2,DS_SIDE=3,DS_STACKED=4,DS_LARGE_SMALL=5,DS_PIP=6,DS_LAYOUTS=7 };
+enum DsLayout { DS_ONE=0,DS_TOP=1,DS_BOTTOM=2,DS_SIDE=3,DS_STACKED=4,DS_LARGE_SMALL=5,DS_PIP=6,DS_TWO=7,DS_LAYOUTS=8 };
 inline bool ds_auto_run(int field,bool moving,bool aHeld){
   constexpr int ready=PK_NDS_FIELD_KNOWN|PK_NDS_FIELD_SCREEN;
   constexpr int blocked=PK_NDS_FIELD_LOCKED|PK_NDS_FIELD_BATTLE|PK_NDS_FIELD_BIKE|

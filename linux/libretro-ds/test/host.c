@@ -1,5 +1,6 @@
 /* Minimal frontend contract test; no firmware, BIOS or commercial ROM bundled. */
 #include "libretro.h"
+#include "pd_env.h"
 #include <assert.h>
 #include <dlfcn.h>
 #include <stdint.h>
@@ -12,6 +13,9 @@ static unsigned fmt, w,h, frame,mask;
 static bool enhanced;
 static unsigned char image[512*384*4];
 static const char* directory;
+// A second screen, once its width is set: what the core sends for it and the finger on it.
+static struct pd_second_screen two;
+static int seconds; // the pictures it got
 static bool env(unsigned cmd,void* p){
  switch(cmd){
  case RETRO_ENVIRONMENT_SET_VARIABLES:
@@ -22,6 +26,13 @@ static bool env(unsigned cmd,void* p){
  case RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY:
  case RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY:*(const char**)p=directory;return true;
  case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:*(bool*)p=false;return true;
+ case PD_ENV_SECOND_SCREEN:{
+  struct pd_second_screen* s=p;
+  seconds+=s->changed;
+  two.pixels=s->pixels;two.src_w=s->src_w;two.src_h=s->src_h;two.panel=s->panel;
+  s->w=two.w;s->h=two.h;s->ptr_x=two.ptr_x;s->ptr_y=two.ptr_y;s->ptr_down=two.ptr_down;s->wheel=two.wheel;two.wheel=0;
+  return true;
+ }
  default:return false;
  }
 }
@@ -47,6 +58,8 @@ static void ppm(const char* root,const char* name){
 #define LOAD(n) __typeof__(&n) n##_fn=dlsym(so,#n);assert(n##_fn)
 int main(int argc,char** argv){
  assert(argc>=4);directory=argv[3];
+ // The run before left its settings.
+ if(argc==4){char path[4096];snprintf(path,sizeof path,"%s/pokedaisy-ds/settings.ini",directory);remove(path);}
  void* so=dlopen(argv[1],RTLD_NOW|RTLD_LOCAL);if(!so){puts(dlerror());return 1;}
  LOAD(retro_set_environment);LOAD(retro_set_video_refresh);LOAD(retro_set_audio_sample_batch);
  LOAD(retro_set_input_poll);LOAD(retro_set_input_state);LOAD(retro_init);LOAD(retro_load_game);
@@ -116,6 +129,51 @@ int main(int argc,char** argv){
   }
   mask=(1u<<RETRO_DEVICE_ID_JOYPAD_SELECT)|(1u<<RETRO_DEVICE_ID_JOYPAD_R2);retro_run_fn();mask=0;retro_run_fn();assert(w==512&&h==384);ppm(directory,"manual-touch");
   mask=1u<<RETRO_DEVICE_ID_JOYPAD_R2;retro_run_fn();mask=0;retro_run_fn();assert(w==512&&h==384);ppm(directory,"bottom");
+ }
+ if(enhanced&&!getenv("PD_TEST_LAYOUT")&&!getenv("PD_TEST_MENU")){
+  // A second screen has the DS's touch screen. The COMPANION button puts the companion there with the buttons, and the strip
+  // on the game. The button again, B or START bring both back.
+  mask=0;retro_run_fn();retro_unserialize_fn(state,n);two.w=1240;two.h=1080;
+  #define RUNS(k) for(int i=0;i<(k);++i)retro_run_fn()
+  #define TAP(id) do{mask=1u<<(id);RUNS(2);mask=0;RUNS(14);}while(0)
+  #define TOUCH(x,y) do{two.ptr_x=x;two.ptr_y=y;two.ptr_down=1;RUNS(3);two.ptr_down=0;RUNS(6);}while(0)
+  #define KEEP(to) memcpy(to,two.pixels,(size_t)two.src_w*two.src_h*4)
+  #define SAME(as) (!memcmp(as,two.pixels,(size_t)two.src_w*two.src_h*4))
+  static unsigned char plain[sizeof image];static uint32_t settings[640*480],below[640*480],touched[640*480];
+  RUNS(6);assert(two.panel&&two.src_w==320&&two.src_h==278);
+  seconds=0;RUNS(6);assert(seconds>0&&w==512&&h==384);memcpy(plain,image,sizeof image);
+  TAP(RETRO_DEVICE_ID_JOYPAD_L2);assert(!two.panel&&two.src_w==320&&memcmp(plain,image,sizeof image));
+  for(int button=0;button<3;++button){
+   TAP(button==0?RETRO_DEVICE_ID_JOYPAD_L2:button==1?RETRO_DEVICE_ID_JOYPAD_B:RETRO_DEVICE_ID_JOYPAD_START);
+   assert(two.panel&&!memcmp(plain,image,sizeof image));
+   TAP(RETRO_DEVICE_ID_JOYPAD_L2);assert(!two.panel);
+  }
+  TAP(RETRO_DEVICE_ID_JOYPAD_L2);
+  // The switch under the touch screen shows the companion alone: the buttons stay the game's until L2, and it brings the
+  // touch screen back.
+  TOUCH(160,259);assert(!two.panel&&!memcmp(plain,image,sizeof image));KEEP(touched);
+  TAP(RETRO_DEVICE_ID_JOYPAD_L2);assert(!two.panel&&memcmp(plain,image,sizeof image)&&!SAME(touched));
+  TOUCH(160,259);RUNS(14);assert(two.panel&&!memcmp(plain,image,sizeof image));
+  // A finger on the PARTY tab while they change places presses nothing, when it's lifted or later. A tap there does.
+  TOUCH(160,259);assert(SAME(touched));
+  two.ptr_x=100;two.ptr_y=228;two.ptr_down=1;RUNS(3);TAP(RETRO_DEVICE_ID_JOYPAD_L2);TAP(RETRO_DEVICE_ID_JOYPAD_L2);assert(two.panel);
+  two.ptr_down=0;RUNS(3);TOUCH(160,259);assert(SAME(touched));
+  TOUCH(100,228);assert(!SAME(touched));TOUCH(305,228);assert(SAME(touched));
+  // A notch of the wheel is a press of the D-pad.
+  TAP(RETRO_DEVICE_ID_JOYPAD_L2);KEEP(settings);
+  two.wheel=-1;RUNS(6);KEEP(below);assert(!SAME(settings));two.wheel=1;RUNS(6);assert(SAME(settings));
+  TAP(RETRO_DEVICE_ID_JOYPAD_DOWN);assert(SAME(below));TAP(RETRO_DEVICE_ID_JOYPAD_UP);assert(SAME(settings));
+  // DS LAYOUT to PICTURE IN PICTURE, where the button only moves the buttons, and back to TWO SCREENS with them on it.
+  TAP(RETRO_DEVICE_ID_JOYPAD_A);TAP(RETRO_DEVICE_ID_JOYPAD_UP);TAP(RETRO_DEVICE_ID_JOYPAD_A);assert(!two.panel);
+  TAP(RETRO_DEVICE_ID_JOYPAD_L2);assert(!two.panel);TAP(RETRO_DEVICE_ID_JOYPAD_L2);assert(!two.panel);
+  TAP(RETRO_DEVICE_ID_JOYPAD_A);TAP(RETRO_DEVICE_ID_JOYPAD_DOWN);TAP(RETRO_DEVICE_ID_JOYPAD_A);assert(!two.panel&&SAME(settings));
+  // DS TOUCH SCREEN's STRETCH: the touch screen over all of it, and the switch at its right edge.
+  TAP(RETRO_DEVICE_ID_JOYPAD_DOWN);TAP(RETRO_DEVICE_ID_JOYPAD_A);TAP(RETRO_DEVICE_ID_JOYPAD_DOWN);TAP(RETRO_DEVICE_ID_JOYPAD_A);
+  TAP(RETRO_DEVICE_ID_JOYPAD_L2);assert(two.panel&&two.src_w==320&&!memcmp(plain,image,sizeof image));
+  TOUCH(310,two.src_h/2);assert(!two.panel);TOUCH(310,two.src_h/2);assert(two.panel);
+  // Without it, the companion's back on the game's screen.
+  two.w=two.h=0;RUNS(3);TAP(RETRO_DEVICE_ID_JOYPAD_L2);assert(w==341&&h==256);
+  TAP(RETRO_DEVICE_ID_JOYPAD_L2);assert(w==512&&h==384);
  }
  assert(!retro_unserialize_fn(state,3));
  free(before);free(state);retro_unload_game_fn();retro_deinit_fn();dlclose(so);

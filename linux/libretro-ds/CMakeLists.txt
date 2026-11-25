@@ -103,7 +103,7 @@ if(BUILD_TESTING)
   target_link_libraries(ds-layout-test PRIVATE pd_ds_presentation)
   add_test(NAME ds-layout-policy COMMAND ds-layout-test)
   add_executable(ds-libretro-host test/host.c)
-  target_include_directories(ds-libretro-host PRIVATE ${LR}/include)
+  target_include_directories(ds-libretro-host PRIVATE ${LR}/include ${ROOT}/linux)
   target_link_libraries(ds-libretro-host PRIVATE dl)
   target_compile_options(ds-libretro-host PRIVATE -UNDEBUG)
   # Run this target with either the stock wrapper or the enhanced core.

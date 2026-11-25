@@ -83,7 +83,7 @@ The 3DS's own 320x240 (`make -C 3ds preview`) must stay as it is: the code is sh
         no smaller than 320x240
   - [ ] Hover, file pickers (Windows' own, the desktop portal / zenity on
         Linux), `%APPDATA%` or portable, Deck touch, button legends per controller
-- [ ] **6. Optional**: the companion in a second window on a second monitor
+- [x] **6. Optional**: the companion in a second window on a second monitor (and on a dual-screen handheld)
 
 ## Found so far
 

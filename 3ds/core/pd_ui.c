@@ -297,7 +297,7 @@ static void tab_bar(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game*
     bool hasMore = ui_more_tabs(ui, g, more) > 0;
     int icons = hasMore ? 2 : 1;
     // L / R at the ends while the buttons are the companion's (ShoulderHint).
-    const bool shoulderHints = ui->keyFocus && !ui->shoulderTabs;
+    const bool shoulderHints = ui->shoulderHints || (ui->keyFocus && !ui->shoulderTabs);
     int keys = shoulderHints ? 2 * (SHOULDER_W + CHIP_GAP) : 0;
     // Fast-forward's chip, on the hosts that show one (libretro frontends own fast-forward).
     int ffW = host && host->hasFfChip && !host->frontendOwnsPlayback ? FF_W + CHIP_GAP : 0;
@@ -885,6 +885,11 @@ bool pd_ui_touch(struct pd_ui* ui, int x, int y, bool down) {
     if (id == -1) return false;
     act(ui, id);
     return true;
+}
+
+void pd_ui_touch_cancel(struct pd_ui* ui) {
+    ui->touching = ui->dragging = ui->barDragging = false;
+    ui->pressedId = -1;
 }
 
 void pd_ui_draw_scrolled(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g,

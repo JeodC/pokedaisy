@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include "../pd_fs.h"
 extern "C" {
+#include "../hud.h"
 #include "pd_style.h"
 #include "pd_tables.h"
 #include "pd_ui_internal.h" // the shared hit ids (HIT_OPTION)
@@ -27,9 +28,10 @@ constexpr int dsTabs=(1<<PD_TAB_PARTY)|(1<<PD_TAB_BAG)|(1<<PD_TAB_MAP)|(1<<PD_TA
 using Companion=DsCompanionUi;
 // HUD opens the shared HUD page (pd_ui_settings.c's hud_page: on/off, LOOK, SIZE and each part), as on the GB/GBA cores;
 // HudSize, HudBalls, HudRepel and HudMap stay rows of the enum for settings files and apply(), not of the list.
-const char* const layoutNames[]={"ONE SCREEN","TOP","BOTTOM","SIDE BY SIDE","STACKED","LARGE + SMALL","PICTURE IN PICTURE"};
+const char* const layoutNames[]={"ONE SCREEN","TOP","BOTTOM","SIDE BY SIDE","STACKED","LARGE + SMALL","PICTURE IN PICTURE","TWO SCREENS"};
 const char* const zoomNames[]={"1x","1.25x","1.5x","2x"};
 const char* const onOffNames[]={"OFF","ON"};
+const char* const touchNames[]={"ORIGINAL","STRETCH"};
 const char* const buttonNames[]={"L2","R2","X","Y","NONE"};
 const unsigned buttonIds[]={RETRO_DEVICE_ID_JOYPAD_L2,RETRO_DEVICE_ID_JOYPAD_R2,RETRO_DEVICE_ID_JOYPAD_X,RETRO_DEVICE_ID_JOYPAD_Y};
 const char* const hudButtonNames[]={ "X", "Y", "L2", "R2", "NONE", "L3" }; // by enum pd_button
@@ -38,22 +40,24 @@ const char* const speedNames[]={"SLOW","NORMAL","FAST"};
 const char* const hudSizeNames[]={ "SMALL", "NORMAL", "LARGE" };
 const char* const resetNames[]={"CANCEL","RESET"};
 const char* const fontNames[]={"PIXEL SMALL","PIXEL"}; // FONT TYPE: the app's default first
-const char* const labels[]={"DS LAYOUT","AUTO BATTLES","HUD","COMPANION BUTTON","SCREEN BUTTON","STYLUS SPEED","QUICK MENU","RESET SETTINGS","BATTLE STRIP","MINIMAL HUD","POKé BALLS","REPEL STEPS","MINIMAP","DARK MODE","AUTO-RUN","TAB BAR","MORE TABS","HUD CURSOR BUTTON","HUD SIZE","ASPECT","ZOOM","AUTO ZOOM IN","FONT TYPE"};
+const char* const labels[]={"DS LAYOUT","AUTO BATTLES","HUD","COMPANION BUTTON","SCREEN BUTTON","STYLUS SPEED","QUICK MENU","RESET SETTINGS","BATTLE STRIP","MINIMAL HUD","POKé BALLS","REPEL STEPS","MINIMAP","DARK MODE","AUTO-RUN","TAB BAR","MORE TABS","HUD CURSOR BUTTON","HUD SIZE","ASPECT","ZOOM","AUTO ZOOM IN","FONT TYPE","DS TOUCH SCREEN"};
 const char* const* choices(int row){
   if(row==DsCompanionUi::Zoom)return zoomNames;
   if(row==DsCompanionUi::Aspect||row==DsCompanionUi::AutoZoom)return onOffNames;
   if(row==DsCompanionUi::HudSize)return hudSizeNames;
   if(row==DsCompanionUi::FontType)return fontNames;
+  if(row==DsCompanionUi::TouchScreen)return touchNames;
   return row==DsCompanionUi::Layout?layoutNames:row==DsCompanionUi::PenSpeed?speedNames:
     row==DsCompanionUi::Reset?resetNames:row==DsCompanionUi::HudButton?hudButtonNames:buttonNames;
 }
-int count(int row){return row==DsCompanionUi::FontType?2:row==DsCompanionUi::Zoom?4:row==DsCompanionUi::Aspect||row==DsCompanionUi::AutoZoom?2:row==DsCompanionUi::HudSize?PD_HUD_SIZES:row==DsCompanionUi::Layout?DS_LAYOUTS:row==DsCompanionUi::CompanionButton?4:
+int count(int row){return row==DsCompanionUi::FontType?2:row==DsCompanionUi::Zoom?4:row==DsCompanionUi::Aspect||row==DsCompanionUi::AutoZoom?2:row==DsCompanionUi::HudSize?PD_HUD_SIZES:row==DsCompanionUi::Layout?DS_TWO:row==DsCompanionUi::CompanionButton?4:
  row==DsCompanionUi::ScreenButton||row==DsCompanionUi::HudButton?5:row==DsCompanionUi::PenSpeed?3:2;}
 }
+int DsCompanionUi::choice_count(int row) const{return row==Layout&&secondScreen?DS_LAYOUTS:count(row);}
 void DsCompanionUi::defaults(){
   pd_settings_defaults(&settings);settings.hud=false;
   settings.tabBar=dsTabs;
-  layout=0;autoBattles=1;companionButton=0;screenButton=1;penSpeed=1;battleStrip=true;hudMinimal=false;darkMode=false;autoRun=false;
+  layout=0;layoutTwo=DS_TWO;autoBattles=1;companionButton=0;screenButton=1;penSpeed=1;battleStrip=true;hudMinimal=false;darkMode=false;autoRun=false;touchFill=bottomCompanion=false;
 }
 void DsCompanionUi::init(const std::string& directory,int legacyLayout,bool legacyHud){
   const bool expandHost=hasExpand;
@@ -80,7 +84,8 @@ void DsCompanionUi::init(const std::string& directory,int legacyLayout,bool lega
       auto key=line.substr(0,at),text=line.substr(at+1);char* end=nullptr;
       long v=std::strtol(text.c_str(),&end,10);
       if(end==text.c_str() || (*end && *end!='\r') || v<0 || v>8)continue;
-      if(key=="ds_layout" && v<DS_LAYOUTS)layout=v;
+      if(key=="ds_layout" && v<DS_TWO)layout=v;
+      if(key=="ds_layout_two" && v<DS_LAYOUTS)layoutTwo=v;
       if(key=="ds_battles" && v<2)autoBattles=v;
       if(key=="ds_companionbtn" && v<4)companionButton=v;
       if(key=="ds_screenbtn" && v<5)screenButton=v;
@@ -89,6 +94,8 @@ void DsCompanionUi::init(const std::string& directory,int legacyLayout,bool lega
       if(key=="ds_darkmode" && v<2)darkMode=v;
       if(key=="ds_autorun" && v<2)autoRun=v;
       if(key=="ds_penspeed" && v<3)penSpeed=v;
+      if(key=="ds_touchfill" && v<2)touchFill=v;
+      if(key=="ds_bottomcompanion" && v<2)bottomCompanion=v;
       if(key=="zoom")sawZoom=true;
     }
   }
@@ -115,7 +122,7 @@ bool DsCompanionUi::save(){
   if(!pd_settings_save(&settings,temp.c_str())){error="Could not save settings";return false;}
   FILE* f=std::fopen(temp.c_str(),"a");bool ok=f;
   if(f){
-    ok=std::fprintf(f,"ds_layout=%d\nds_battles=%d\nds_companionbtn=%d\nds_screenbtn=%d\nds_penspeed=%d\nds_battlestrip=%d\nds_hudminimal=%d\nds_darkmode=%d\nds_autorun=%d\n",layout,autoBattles,companionButton,screenButton,penSpeed,battleStrip,hudMinimal,darkMode,autoRun)>0;
+    ok=std::fprintf(f,"ds_layout=%d\nds_layout_two=%d\nds_battles=%d\nds_companionbtn=%d\nds_screenbtn=%d\nds_penspeed=%d\nds_battlestrip=%d\nds_hudminimal=%d\nds_darkmode=%d\nds_autorun=%d\nds_touchfill=%d\nds_bottomcompanion=%d\n",layout,layoutTwo,autoBattles,companionButton,screenButton,penSpeed,battleStrip,hudMinimal,darkMode,autoRun,touchFill,bottomCompanion)>0;
     if(std::fflush(f) || fsync(fileno(f)))ok=false;
     if(std::fclose(f))ok=false;
   }
@@ -155,18 +162,19 @@ int DsCompanionUi::value(int row)const{
   if(row==HudSize)return settings.hudSize;
   if(row==DarkMode)return darkMode;
   if(row==FontType)return settings.fontPixel?1:0;
+  if(row==TouchScreen)return touchFill;
   if(row==AutoRun)return autoRun;
   if(row==HudMinimal)return hudMinimal;
   if(row==HudMap)return !(settings.hudHidden&(1<<PD_HUD_MAP));
   if(row==HudBalls||row==HudRepel)return !(settings.hudHidden&(1<<(row==HudBalls?PD_HUD_BALLS:PD_HUD_REPEL)));
-  return row==Layout?layout:row==Battles?autoBattles:row==Hud?settings.hud:
+  return row==Layout?shown_layout():row==Battles?autoBattles:row==Hud?settings.hud:
     row==CompanionButton?companionButton:row==ScreenButton?screenButton:row==PenSpeed?penSpeed:row==QuickStyle?settings.quickGrid:row==BattleStrip?battleStrip:0;
 }
 void DsCompanionUi::apply(int row,int v){
   if(row==Aspect){settings.aspect=v?PD_ASPECT_EXPAND:PD_ASPECT_ORIGINAL;build_order();}
   else if(row==Zoom)settings.zoom=v;
   else if(row==AutoZoom)settings.autoZoom=v!=0;
-  else if(row==Layout){layout=v;++displayRevision;}
+  else if(row==Layout){(secondScreen?layoutTwo:layout)=v;++displayRevision;build_order();}
   else if(row==Battles)autoBattles=v;
   else if(row==Hud)settings.hud=v;
   else if(row==CompanionButton){
@@ -192,13 +200,14 @@ void DsCompanionUi::apply(int row,int v){
   else if(row==HudSize)settings.hudSize=v;
   else if(row==DarkMode)darkMode=v;
   else if(row==FontType)settings.fontPixel=v!=0;
+  else if(row==TouchScreen)touchFill=v;
   else if(row==AutoRun){
     if(game==DsGame::Unsupported){error="Auto-Run unavailable for this ROM";return;}
     autoRun=v;
   }
   else if(row==HudMap)settings.hudHidden^=1<<PD_HUD_MAP;
   else if(row==HudBalls||row==HudRepel)settings.hudHidden^=1<<(row==HudBalls?PD_HUD_BALLS:PD_HUD_REPEL);
-  else if(row==Reset && v){defaults();++displayRevision;frame.settings=&settings;options.settings=&settings;}
+  else if(row==Reset && v){defaults();++displayRevision;build_order();frame.settings=&settings;options.settings=&settings;}
   save();
 }
 
@@ -221,7 +230,9 @@ void DsCompanionUi::build_order(){
     order.push_back(Aspect);
     if(settings.aspect != PD_ASPECT_ORIGINAL){order.push_back(Zoom);order.push_back(AutoZoom);}
   }
-  order.push_back(Layout);order.push_back(Hud);order.push_back(HudMinimal);fronts("SCREEN");
+  order.push_back(Layout);
+  if(secondScreen && layoutTwo==DS_TWO)order.push_back(TouchScreen);
+  order.push_back(Hud);order.push_back(HudMinimal);fronts("SCREEN");
   order.push_back(CompanionButton);order.push_back(DarkMode);order.push_back(FontType);end();
   begin(3);order.push_back(Battles);order.push_back(BattleStrip);order.push_back(TabBar);order.push_back(MoreTabs);
   fronts("COMPANION");end();
@@ -229,6 +240,11 @@ void DsCompanionUi::build_order(){
   order.push_back(PenSpeed);end();
   begin(5);fronts("APP");order.push_back(Reset);end();
   if(setting<0 || std::find(order.begin(),order.end(),setting)==order.end())setting=hasExpand?Aspect:Layout;
+}
+void DsCompanionUi::set_second_screen(bool on){
+  secondScreen=on;
+  ++displayRevision;
+  build_order();
 }
 void DsCompanionUi::set_front_rows(int count,const char (*labels)[24],const char (*values)[24],const char (*groups)[16]){
   count=std::clamp(count,0,FrontMax);
@@ -243,16 +259,17 @@ void DsCompanionUi::set_front_rows(int count,const char (*labels)[24],const char
 void DsCompanionUi::open_front_rows(){
   frame.tab=PD_TAB_SETTINGS;frame.overlay=PD_OVERLAY_NONE;picker=-1;
   if(frontCount>0)setting=Rows;
+  options.optionFollowed=-1;
 }
 void DsCompanionUi::draw_settings(pd_canvas* c){
   const auto& s=*snapshot;
   char money[32];
   pd_ui_format_money(s.valid?s.money:-1,money,sizeof money);
-  const char* values[]={layoutNames[layout],autoBattles?"ON":"OFF",settings.hud?"ON":"OFF",
+  const char* values[]={layoutNames[shown_layout()],autoBattles?"ON":"OFF",settings.hud?"ON":"OFF",
     buttonNames[companionButton],buttonNames[screenButton],speedNames[penSpeed],settings.quickGrid?"GRID":"RING","...",battleStrip?"ON":"OFF",hudMinimal?"ON":"OFF",value(HudBalls)?"ON":"OFF",value(HudRepel)?"ON":"OFF",value(HudMap)?"ON":"OFF",darkMode?"ON":"OFF",game==DsGame::Unsupported?"N/A":autoRun?"ON":"OFF",game==DsGame::Unsupported?"N/A":"EDIT",
     (settings.tabBar & dsTabs)==dsTabs?"NONE HIDDEN":"OPEN",hudButtonNames[settings.hudBtn],hudSizeNames[value(HudSize)],
     settings.aspect==PD_ASPECT_ORIGINAL?"ORIGINAL":"EXPAND",zoomNames[std::clamp(settings.zoom,0,3)],settings.autoZoom?"ON":"OFF",
-    fontNames[settings.fontPixel?1:0]};
+    fontNames[settings.fontPixel?1:0],touchNames[touchFill]};
   constexpr int infoCount=3;
   pd_option_row rows[Rows+FrontMax+8+infoCount]={{"PLACE",s.valid?ds_place(s.map,s.game):"-"},
     {"MONEY",money},{"HOST","PokeDaisy core"}};
@@ -289,6 +306,7 @@ const std::vector<int>* DsCompanionUi::dex_order() const{
 
 void DsCompanionUi::draw_body(pd_ui* u,pd_canvas* c){
   if(u->tab==PD_TAB_SETTINGS){draw_settings(c);return;}
+  options.optionFollowed=-1; // back on SETTINGS, the list shows the cursor's row
   if(!supported || !snapshot->valid){
     pd_title_box(c,4,4,c->w-8,24,PD_TITLE_FILL);
     pd_text(c,12,9,supported?"WAITING FOR SAVE DATA":"COMPANION UNAVAILABLE FOR THIS ROM",PD_TITLE_TEXT,PD_TITLE_SHADOW);return;
@@ -397,7 +415,7 @@ void DsCompanionUi::draw(pd_canvas* c,const DsCompanion& s,bool match,const DsMa
     ds_touch_view(&hits,&choicesUi);
   }
   if(picker>=0){
-    pd_ui_choices_view_ui(&choicesUi,c,labels[picker],choices(picker),count(picker),choice);
+    pd_ui_choices_view_ui(&choicesUi,c,labels[picker],choices(picker),choice_count(picker),choice);
     ds_touch_view(&hits,&choicesUi);
   }
   if(!error.empty()){
@@ -454,7 +472,7 @@ bool DsCompanionUi::control(unsigned pressed){
     return false;
   }
   if(picker>=0){
-    choice=std::clamp(choice+dy,0,count(picker)-1);
+    choice=std::clamp(choice+dy,0,choice_count(picker)-1);
     if(hit(RETRO_DEVICE_ID_JOYPAD_B)){picker=-1;return false;}
     if(hit(RETRO_DEVICE_ID_JOYPAD_A)){int row=picker;picker=-1;apply(row,choice);}return false;
   }
@@ -683,7 +701,7 @@ void DsCompanionUi::tap_act(int id){
   }else if(id>=HIT_OPTION && id<HIT_OPTION+64){ // room for SETTINGS' longest list (its rows, headings and the host's)
     const int row=id-HIT_OPTION;
     if(picker>=0){
-      const int which=picker;picker=-1;choice=std::clamp(row,0,count(which)-1);apply(which,choice);
+      const int which=picker;picker=-1;choice=std::clamp(row,0,choice_count(which)-1);apply(which,choice);
     }else if(placeRow>=0 && snapshot){
       // A tap on a PLACES row goes there at once, as A does.
       const int pick=std::clamp(placeFirst+row,0,std::max(0,int(mapPlaces.size())-1));
@@ -702,6 +720,16 @@ void DsCompanionUi::tap_act(int id){
 
 bool DsCompanionUi::touch(int x,int y,bool down){
   if(down){
+    // A drag moves a list of rows; the shared frame's lists drag in pd_ui_touch.
+    if(!tapHeld){dragY=y;dragging=false;}
+    else if(!tapFrame && !tapWindow && frame.tab==PD_TAB_SETTINGS){
+      dragging|=std::abs(dragY-y)>8;
+      if(dragging){options.settingsScroll+=dragY-y;dragY=y;}
+    }else if(!tapFrame && (tapWindow || frame.tab==PD_TAB_BAG || frame.tab==PD_TAB_DEX)){
+      const int rows=(dragY-y)/16;
+      if(rows){dragY-=rows*16;dragging=true;wheel(-rows);}
+    }
+    if(dragging){tapId=-1;tapClose=false;return true;}
     tapHeld=true;tapX=x;tapY=y;tapId=-1;tapFrame=false;tapClose=false;tapTab=frame.tab;
     tapWindow=picker>=0 || placeRow>=0;
     if(tapWindow){
@@ -739,6 +767,22 @@ bool DsCompanionUi::touch(int x,int y,bool down){
     choice=0;scroll=dexEntry=0;placeRow=mapAction=dexFilterFocus=-1;bagTabKey=-1;summary=details=false;error.clear();
   }
   return true;
+}
+
+void DsCompanionUi::draw_switch(pd_canvas* c,int x,int y,int w,int h,bool onCompanion,bool pressed){
+  settings.darkMode=darkMode;
+  pd_style_enable(true);
+  pd_look_apply(nullptr,&settings);
+  pd_font_size_set(!settings.fontPixel);
+  hud_switch_draw(c,x,y,w,h,touchFill,onCompanion,pressed);
+  pd_font_size_set(0);
+  pd_look_apply(nullptr,nullptr);
+}
+
+void DsCompanionUi::cancel_touch(){
+  tapHeld=tapFrame=tapWindow=tapClose=dragging=false;
+  tapId=-1;
+  pd_ui_touch_cancel(&frame);
 }
 
 void DsCompanionUi::wheel(int notches){

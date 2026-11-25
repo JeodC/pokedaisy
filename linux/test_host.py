@@ -132,6 +132,29 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     w,h,bpp,rows=png_pixels(d/'gba.png')
     row=rows[h//2];seen={tuple(row[i:i+3]) for i in range(0,w*bpp,bpp)}
     assert any(r>120 and g>120 and b>120 for r,g,b in seen) and any(r>120 and g>120 and b<60 for r,g,b in seen),(seen,log[-500:])
+    # A second screen (a window stands in for it, the Thor's size) has the companion, where a tap picks a tab, and the DS's
+    # touch screen, which the COMPANION button or the one under it swaps for the companion. That one is remembered.
+    env['POCKET_SECOND_SCREEN']='1240x1080'
+    with (d/'host.ini').open('a') as f:f.write('second_screen=1\n')
+    def second(rom,bottom=1080,**keys):
+        env.update(keys)
+        run(d,str(d/'roms'/rom),'--frames','120','--shot',str(d/'two.png'))
+        for k in keys:del env[k]
+        w,h,bpp,rows=png_pixels(d/'two.png.second.png');assert (w,h)==(1240,1080),(w,h)
+        return {tuple(rows[y][x*bpp:x*bpp+3]) for y in range(0,bottom,24) for x in range(0,w,24)}
+    for rom in ('diagnostic.gb','diagnostic.gba'):
+        party=second(rom);assert len(party)>3,rom
+        assert second(rom,POCKET_MOUSE='60:1190:1030:s')!=party,rom
+    touch=second('diagnostic.nds',900);assert (255,255,255) in touch and len(touch)<=2,touch
+    swapped=second('diagnostic.nds',900,POCKET_KEYS='60:l2:4');assert len(swapped)>3,swapped
+    assert second('diagnostic.nds',900,POCKET_KEYS='60:l2:4,90:l2:4')==touch
+    assert len(second('diagnostic.nds',900,POCKET_MOUSE='60:620:1005:s'))>3 and len(second('diagnostic.nds',900))>3
+    assert second('diagnostic.nds',900,POCKET_MOUSE='60:620:1005:s')==touch
+    # The LCD filter is over the touch screen and not over the companion.
+    with (d/'host.ini').open('a') as f:f.write('lcd=1\n')
+    assert second('diagnostic.nds',900)!=touch and second('diagnostic.gba')==party
+    del env['POCKET_SECOND_SCREEN']
+    with (d/'host.ini').open('a') as f:f.write('lcd=0\nsecond_screen=0\n')
     # DS maps the ROM from its path, so it also works above the host's 64 MiB buffer limit.
     with (d/'roms/diagnostic.nds').open('r+b') as nds:nds.truncate(65 << 20)
     # Select DS from the sorted list, save a state through the host menu, and return (QUIT asks: CANCEL, then QUIT). In a

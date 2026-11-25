@@ -470,6 +470,7 @@ struct pd_ui {
     bool bagDetails;
     bool handheldDex, handheldParty;
     bool shoulderTabs; // handheld tab cycle includes More, without D-pad tab focus
+    bool shoulderHints; // L / R at the tab bar's ends: the buttons are on a second screen's companion
     bool hudLayoutFixed; // the host draws one HUD layout: the HUD page's LAYOUT row is N/A (the DS core)
     const struct pd_party_source* partySource;
     int summaryPage;
@@ -570,6 +571,7 @@ struct pd_ui {
     int settingsNavId, settingsNavCount, settingsNavHeight;
     struct { int id, top; } settingsNav[PD_UI_MAX_HITS];
     int settingsScroll; // SETTINGS' list, in canvas pixels
+    int optionFollowed; // a host-owned list's row the list last scrolled to: a drag stays until the cursor moves on
     struct pd_settings* settings;
     enum pd_action action;
     int actionSlot;
@@ -634,6 +636,7 @@ void pd_ui_draw(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g,
 // A mouse wheel's [notches] (+ up) over (x, y): the list under it scrolls, two rows a notch. True when it moved (redraw).
 bool pd_ui_wheel(struct pd_ui* ui, int x, int y, int notches);
 bool pd_ui_touch(struct pd_ui* ui, int x, int y, bool down);
+void pd_ui_touch_cancel(struct pd_ui* ui);
 // When nothing but pd_ui_touch's scroll-only changes (touchScrollOnly) came since the last draw, over the picture it left:
 // the list's box alone (the same pixels a whole redraw gives there; the rest of the canvas is left as it was). The host
 // keeps track of that; with no list box known it's a whole pd_ui_draw.

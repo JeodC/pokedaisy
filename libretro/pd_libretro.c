@@ -731,6 +731,12 @@ static uint32_t *compPx, *compInner;
 static int compW, compH;               // this window's picture (companion_window); the companion is drawn PD_COMPANION_PAD inside it
 static struct pd_companion compReply;  // the host's last answer: the mouse over the window
 static bool compTouchWas, compDimHeld;
+// With a second screen (PD_ENV_SECOND_SCREEN) the companion is always on it, and [companion] is whether the pad is too.
+static struct pd_second_screen second;
+static bool secondOn, secondTouchWas, secondHeld;
+static bool companion_over(void) { return companion && !secondOn; }
+static bool secondField; // the buttons went to it on the field: leaving the field brings them back
+static int stripRows;
 // The frontend's own settings in the companion's SETTINGS (PD_ENV_FRONT_ROWS): its rows, and a row pressed for it.
 static struct pd_front_rows frontRows;
 static int frontPress = -1;
@@ -897,21 +903,39 @@ static int want_canvas(void);
 static int want_zoom(void);
 static void canvas_for(int fw, int fh, int kind, int extra, int *w, int *h);
 
+static void picture_rect(int *x, int *y, int *w, int *h) {
+  int gs = game_scale(gameW, gameH);
+  *w = (int)gameW * gs;
+  *h = (int)gameH * gs;
+  if (wideReady) { // the wide view (EXPAND, ZOOM OUT) is what is on screen: anchor to it, not to the centred game picture
+    const int ws = 1; // wide_window's pixels, as draw_game draws them
+    *w = (int)wideW * ws;
+    *h = (int)wideH * ws;
+  }
+  *x = (CW - *w) / 2;
+  *y = (CH - *h) / 2;
+}
+static void draw_strip(void) {
+  int x, y, w, h;
+  picture_rect(&x, &y, &w, &h);
+  hud_strip_draw(&canvas, x, y, w, h, h / (int)gameH, stripRows, frames);
+}
+static bool strip_hit(int tx, int ty) {
+  int x, y, w, h;
+  if (!stripRows)
+    return false;
+  picture_rect(&x, &y, &w, &h);
+  return tx >= x && tx < x + w && hud_strip_hit(y, h, h / (int)gameH, stripRows, ty);
+}
+
 /* The HUD over the game's own picture, a canvas pixel a game pixel: SIZE picks the mini HUD (SMALL, NORMAL) or the full
  * one (LARGE). */
 static void draw_hud(void) {
   hudNativeOn = false;
-  int gs = game_scale(gameW, gameH);
-  int ax = (CW - (int)gameW * gs) / 2, ay = (CH - (int)gameH * gs) / 2, aw = (int)gameW * gs, ah = (int)gameH * gs;
-  bool base = false; // a ZOOM step: the HUD keeps the 1x picture's layout, so the frontend's smaller scale leaves it the same
-  if (wideReady) { // the wide view (EXPAND, ZOOM OUT) is what is on screen: anchor to it, not to the centred game picture
-    const int ws = 1; // wide_window's pixels, as draw_game draws them
-    aw = (int)wideW * ws;
-    ah = (int)wideH * ws;
-    ax = (CW - aw) / 2;
-    ay = (CH - ah) / 2;
-    base = panelW && want_zoom() > 0 && !companion;
-  }
+  int ax, ay, aw, ah;
+  picture_rect(&ax, &ay, &aw, &ah);
+  // a ZOOM step: the HUD keeps the 1x picture's layout, so the frontend's smaller scale leaves it the same
+  const bool base = wideReady && panelW && want_zoom() > 0 && !companion_over();
   // SMALL / NORMAL: the mini HUD (a core's canvas is the game's own pixels, shown 3x to 6x); LARGE: the full one.
   hudState.mini = settings.hudSize != PD_HUD_LARGE;
   int scale = canvasScale;
@@ -928,12 +952,15 @@ static void draw_hud(void) {
     hudPixels = malloc((size_t)CANVAS_MAX_W * CANVAS_MAX_H * sizeof *hudPixels);
   if (!hudPixels)
     return;
-  uint32_t key = hud_key(&game, &snap, &hudState, &settings) ^ (uint32_t)(w * 65599 + hh);
+  uint32_t key = hud_key(&game, &snap, &hudState, &settings) ^ (uint32_t)(w * 65599 + hh) ^ (companion ? 0x80000000u : 0);
   if (key != hudDrawnKey || w != hudW || hh != hudH) {
     struct pd_canvas hc;
     pd_canvas_init(&hc, w, hh, hudPixels);
     hudShown = hud_draw(&hc, &game, &snap, &hudState, &settings, &hudHits);
     quick_finish(&hc);
+    // It fades back to a quarter while the buttons are on the second screen.
+    for (int i = 0; companion && i < w * hh; i++)
+      hudPixels[i] = hudPixels[i] >> 26 << 24 | (hudPixels[i] & 0xFFFFFF);
     hudDrawnKey = key;
     hudW = w;
     hudH = hh;
@@ -1200,7 +1227,7 @@ static bool companion_window(void) {
 }
 
 static int want_canvas(void) {
-  if ((companion && !companion_window()) || (quickOpen && !PD_BE_IS_GBA()))
+  if ((companion_over() && !companion_window()) || (quickOpen && !PD_BE_IS_GBA()))
     return CANVAS_MENU;
   if (settings.aspect == PD_ASPECT_ORIGINAL)
     return PD_BE_IS_GBA() ? CANVAS_EXPAND : CANVAS_ZOOM;
@@ -1277,7 +1304,7 @@ static void zoom_host_update(void) {
 static void canvas_update(bool notify) {
   int w = menuW, h = menuH, scale = 1;
   unsigned fw = gameW ? gameW : (unsigned)baseGW, fh = gameH ? gameH : (unsigned)baseGH;
-  if (PD_BE_IS_GBA() && !companion && settings.aspect == PD_ASPECT_ORIGINAL && fw && fh) {
+  if (PD_BE_IS_GBA() && !companion_over() && settings.aspect == PD_ASPECT_ORIGINAL && fw && fh) {
     w = (int)fw;
     h = (int)fh;
   } else if (panelW) {
@@ -1295,7 +1322,7 @@ static void canvas_update(bool notify) {
     int s2 = panelW / (2 * w) < panelH / (2 * h) ? panelW / (2 * w) : panelH / (2 * h);
     shrinks = 2 * s2 < s1;
   }
-  if (PD_BE_IS_GBA() && !companion && quickOpen && !shrinks && (w < 320 || h < 240) && w <= CWMAX / 2 && h <= CHMAX / 2) {
+  if (PD_BE_IS_GBA() && !companion_over() && quickOpen && !shrinks && (w < 320 || h < 240) && w <= CWMAX / 2 && h <= CHMAX / 2) {
     scale = 2;
     w *= scale;
     h *= scale;
@@ -1434,6 +1461,11 @@ RETRO_API bool retro_load_game(const struct retro_game_info *g) {
       compInner = calloc((size_t)CANVAS_MAX_W * CANVAS_MAX_H, sizeof *compInner);
     }
     compTouchWas = compDimHeld = false;
+    memset(&second, 0, sizeof second);
+    secondOn = secondTouchWas = false;
+    stripRows = 0;
+    if (realEnv && realEnv(PD_ENV_SECOND_SCREEN, &second) && !compPx)
+      compPx = calloc((size_t)CANVAS_MAX_W * CANVAS_MAX_H, sizeof *compPx);
   }
   {
     struct retro_audio_buffer_status_callback abc = {audio_status_both};
@@ -1724,7 +1756,7 @@ static void hud_press(int id) {
       jobFrames = 0;
     }
   }
-  if (id != HUD_PC)
+  if (id != HUD_PC && !secondOn)
     companion = true;
 }
 
@@ -1816,12 +1848,113 @@ static int hud_hit_at(int x, int y) {
 
 /* Field frames in a row: the HUD comes up after 20. Also counted on a frame the frontend hides, so the HUD shows on the
  * same frame with and without fast-forward's skipped frames. */
-static void hud_field_tick(void) {
-  const bool field = PD_BE_IS_GB()
+static bool on_field(void) {
+  return PD_BE_IS_GB()
                          ? wideSupported && pk_wide_scene() == PK_WIDE_SCENE_FIELD && !snap.inBattle && flyStage == 0
                          : (fieldFlags & PK_FIELD_KNOWN) && !(fieldFlags & (PK_FIELD_LOCKED | PK_FIELD_BATTLE)) &&
                                (!wideSupported || pk_wide_scene() == PK_WIDE_SCENE_FIELD) && flyStage == 0;
-  hudFieldFrames = field ? hudFieldFrames + 1 : 0;
+}
+static void hud_field_tick(void) {
+  hudFieldFrames = on_field() ? hudFieldFrames + 1 : 0;
+}
+
+static void companion_draw(void) {
+  pd_ui_update(&ui, &snap);
+  ui.focusId = companion ? focusId : -1;
+  ui.shoulderHints = companion && secondOn;
+  host.ffOn = false;
+  host.hasState = false;
+  host.flightReady = freeFlight && fly_flyer(&snap) >= 0; // MAP's TAKE OFF / LAND
+  host.flying = freeFlight && pk_flight_state() != PK_FLIGHT_IDLE;
+  memset(canvas.px, 0, (size_t)canvas.w * canvas.h * sizeof *canvas.px);
+  // Use the Dex's compact font throughout the GBC Companion. Restore the cart font for the in-game HUD.
+  const bool gen2 = game.cfg && game.cfg->gb && game.cfg->gb->gen == 2;
+  const struct pd_glyph *glyphs = NULL;
+  int glyphCount = 0;
+  if (gen2) {
+    pd_font_get(&glyphs, &glyphCount);
+    pd_font_set(NULL, 0);
+  }
+  // FONT TYPE: PIXEL SMALL (the app's default) or PIXEL, for the companion alone; the HUD and the quick menu keep
+  // Pixel Operator as before.
+  pd_font_size_set(!settings.fontPixel);
+  pd_ui_draw(&ui, &canvas, &game, &snap, &host);
+  pd_font_size_set(0);
+  if (gen2)
+    pd_font_set(glyphs, glyphCount);
+  map_cursor_sync(&ui, &game, &snap);
+  if (companion && (ui.tab != PD_TAB_GUIDE || (ui.overlay != PD_OVERLAY_NONE && ui.overlay != PD_OVERLAY_GUIDE_NOTICE))) {
+    const int focus = focus_after_draw(&ui, focus_resolve(&ui));
+    if (ui.overlay != PD_OVERLAY_NONE ||
+        (ui.tab != PD_TAB_SETTINGS && (ui.tab != PD_TAB_PARTY || ui.summarySlot < 0) &&
+         !(ui.tab == PD_TAB_BAG && ui.bagTabs)))
+      focus_draw(&ui, focus);
+  }
+}
+
+static void second_poll(void) {
+  if (!realEnv || !realEnv(PD_ENV_SECOND_SCREEN, &second))
+    second.w = second.h = 0;
+  second.changed = 0;
+  const bool on = second.w > 0 && second.h > 0 && compPx;
+  if (on != secondOn) {
+    secondOn = on;
+    companion = secondTouchWas = false;
+    pd_ui_touch_cancel(&ui);
+    second.pixels = NULL;
+  }
+}
+static void second_touch(void) {
+  // Nothing is pressed while the quick menu or the HUD's cursor pauses the game its action would wait for: one that came up
+  // under the finger takes the press back, and a new press only closes it.
+  if (quickOpen || hudFocus) {
+    if (secondTouchWas) {
+      pd_ui_touch_cancel(&ui);
+      secondTouchWas = false;
+    } else if (second.ptr_down && !secondHeld) {
+      quickOpen = flyList = repelList = hudFocus = false;
+      flyAsk = 0;
+      hudState.focus = -1;
+    }
+    secondHeld = true;
+  }
+  secondHeld = secondHeld && second.ptr_down;
+  if (second.ptr_down && !secondHeld) {
+    if (!secondTouchWas)
+      focusId = -1; // the pad's cursor goes when a finger takes over
+    pd_ui_touch(&ui, second.ptr_x, second.ptr_y, true);
+  } else if (secondTouchWas)
+    pd_ui_touch(&ui, 0, 0, false);
+  secondTouchWas = second.ptr_down && !secondHeld;
+  if (second.wheel && !quickOpen && !hudFocus)
+    pd_ui_wheel(&ui, second.ptr_x, second.ptr_y, second.wheel);
+}
+// X takes the buttons to the second screen only on the field, in a game whose field the core can read (the app's
+// canFocusBottom). Leaving it, for a battle or a screen of the game's, brings them back.
+static bool second_takes(void) {
+  return on_field() || (!snap.inBattle && !(PD_BE_IS_GB() ? wideSupported : fieldKnown));
+}
+static void second_keys(void) {
+  if (!companion) {
+    secondField = false;
+    return;
+  }
+  const int scene = wideSupported ? pk_wide_scene() : PK_WIDE_SCENE_FIELD;
+  const bool left = snap.inBattle || (fieldFlags & PK_FIELD_BATTLE) || scene == PK_WIDE_SCENE_BATTLE_START ||
+                    scene == PK_WIDE_SCENE_OFF || scene == PK_WIDE_SCENE_MENU;
+  if (down(START) || (left && secondField))
+    companion = secondField = false;
+  else if (!left)
+    secondField = true;
+}
+static void second_draw(void) {
+  const struct pd_canvas gameCanvas = canvas;
+  pd_second_size(second.w, second.h, 240, CANVAS_MAX_W, CANVAS_MAX_H, &second.src_w, &second.src_h);
+  pd_canvas_init(&canvas, second.src_w, second.src_h, compPx);
+  companion_draw();
+  canvas = gameCanvas;
+  second.pixels = compPx;
+  second.changed = 1;
 }
 
 RETRO_API void retro_run(void) {
@@ -1840,6 +1973,7 @@ RETRO_API void retro_run(void) {
   apply_aspect_option(); // the frontend's ASPECT can change mid-game: a lookup a frame, a resize only when it does
   apply_panel_option();  // so can its window: the canvas is laid out for the panel again when that changes
   zoom_host_update();    // the companion's ZOOM list follows the game's size and the window
+  second_poll();
   canvas_update(true);   // the companion's ASPECT / ZOOM may have changed: resize only when it does
   quickBtn = key_of(settings.quickBtn);
   companionBtn = key_of(settings.companionBtn);
@@ -1865,7 +1999,9 @@ RETRO_API void retro_run(void) {
     snapshot(); // FLASH dims on who knows it and the lit flag: read as the menu opens, not up to 30 frames old
   // A tap on the quick menu: a tile (or a FLY / REPEL list row) is picked as A picks it; outside, the list or the menu
   // closes as B. On the field, a tap that starts and ends on one HUD part presses it; the game picture itself does nothing.
-  if (touch_tapped() && quickOpen && !companion) {
+  if (touch_tapped() && secondOn && companion && strip_hit(touchX0, touchY0) && strip_hit(touchX, touchY)) {
+    companion = false;
+  } else if (touch_tapped() && quickOpen && !companion_over()) {
     const int x = touchX * quick_width() / CW, y = touchY * quick_height() / CH;
     int i = (flyList || repelList) ? quick_list_hit(x, y) : quick_hit(x, y);
     if (i >= 0) {
@@ -1878,7 +2014,7 @@ RETRO_API void retro_run(void) {
       pressedKeys |= 1u << A;
     } else
       pressedKeys |= 1u << B;
-  } else if (touch_tapped() && !quickOpen && !companion && hudShown && !compDimHeld) { // not the click that closed the window
+  } else if (touch_tapped() && !quickOpen && !companion_over() && hudShown && !compDimHeld) { // not the click that closed the window
     int id = hud_hit_at(touchX0, touchY0);
     if (id >= 0 && id == hud_hit_at(touchX, touchY)) {
       hudFocus = false;
@@ -1886,7 +2022,7 @@ RETRO_API void retro_run(void) {
       hud_press(id);
     }
   }
-  if (!touchDown && !companion)
+  if (!touchDown && !companion_over())
     compDimHeld = compTouchWas = false;
   // The frontend's rows for SETTINGS, the row pressed last frame handed over; its menu's SETTINGS opens the companion there.
   if (realEnv) {
@@ -1912,7 +2048,9 @@ RETRO_API void retro_run(void) {
     }
   }
   bool wasCompanion = companion;
-  if (down(companionBtn) && !hudFocus) {
+  if (secondOn)
+    second_keys();
+  if (down(companionBtn) && !hudFocus && (!secondOn || companion || second_takes())) {
     companion = !companion;
     quickOpen = flyList = repelList = false;
     flyAsk = 0;
@@ -2155,12 +2293,17 @@ RETRO_API void retro_run(void) {
     }
   }
 
-  if (companion) {
+  const unsigned padKeys = pressedKeys;
+  if (!companion)
+    pressedKeys = 0; // a second screen's companion without the pad: touch alone
+  if (companion || secondOn) {
     if (ui.tab != PD_TAB_BAG || ui.overlay != PD_OVERLAY_NONE)
       ui.bagTabs = false; // the pocket tab bar's cursor lives only on the bag
     // The finger over the companion, as the 3DS's stylus: down every frame it's held (drags scroll), then up. As a window,
     // the host's mouse over it, in the window's own pixels; a press on the dimmed game beside it closes it (the app's).
-    if (compW > 0 && compReply.ptr_valid) {
+    if (secondOn)
+      second_touch();
+    else if (compW > 0 && compReply.ptr_valid) {
       const bool press = compReply.ptr_down != 0;
       if (press && !compTouchWas && !compDimHeld && !compReply.ptr_inside) {
         compDimHeld = true;
@@ -2346,6 +2489,7 @@ RETRO_API void retro_run(void) {
       break;
     }
   }
+  pressedKeys = padKeys;
 
   canvas_update(true);
 #ifdef PD_NOSKIP
@@ -2369,7 +2513,7 @@ RETRO_API void retro_run(void) {
   if (polishedActions && companion && pd_binput_busy(&polishedInput))
     companion = false; // The native battle / Bag / party resumes with the selected action.
   // The companion as a window keeps the game running under it, as the app's does (its keys stay the companion's).
-  const bool companionRuns = companion && companion_window();
+  const bool companionRuns = companion && (secondOn || companion_window());
   bool paused = (companion && !companionRuns) || hudFocus || (quickOpen && !flyAsk);
   const bool expanded = wideSupported && settings.aspect != PD_ASPECT_ORIGINAL;
   const bool repeat = late && canDupe && haveGameFrame && !paused && !quickOpen &&
@@ -2446,14 +2590,14 @@ RETRO_API void retro_run(void) {
     PD_BE_AUDIO(silence, 549);
   }
 
-  if (!snap.valid || (companion && !wasCompanion) || (!companion && frames % 30 == 0))
+  if (!snap.valid || (companion && !wasCompanion) || (!companion_over() && frames % 30 == 0))
     snapshot();
   companionWas = companion;
   frames++;
 
   // FLY's steps and the field-item jobs, each between two frames the game's own code can be called in.
   bool flyBattle = snap.inBattle || (fieldFlags & PK_FIELD_BATTLE);
-  bool flyBusy = companion || (fieldFlags & PK_FIELD_LOCKED) || (wideSupported && pk_wide_scene() != PK_WIDE_SCENE_FIELD);
+  bool flyBusy = companion_over() || (fieldFlags & PK_FIELD_LOCKED) || (wideSupported && pk_wide_scene() != PK_WIDE_SCENE_FIELD);
   // FLIGHT AREA (the app's syncFlightArea, every half second): pk_flight told the save's seen maps, the map the player
   // stands on added while on the free field; or "anywhere".
   if (freeFlight && frames % 30 == 0)
@@ -2487,7 +2631,7 @@ RETRO_API void retro_run(void) {
     }
   }
   CALL_TEST(flyBusy, flyBattle);
-  if ((flyCfg || gbf) && flyAsk && quickOpen && !companion) {
+  if ((flyCfg || gbf) && flyAsk && quickOpen && !companion_over()) {
     bool answered = false;
     if (gbf) {
       gb_field_fly_targets(core, gbf, romData, romLen, flyBusy, &flyT);
@@ -2516,7 +2660,7 @@ RETRO_API void retro_run(void) {
       notice(fly_reason(FLY_FAILED));
     }
   }
-  if (gbf && flyStage == 1 && !companion) {
+  if (gbf && flyStage == 1 && !companion_over()) {
     // The Game Boy's FLY is RAM the game's own loop acts on (Gen 1) or a queued script (Crystal): one step, then a check.
     enum fly_result r = gb_field_fly(core, gbf, romData, romLen, flyMapsec, flyBusy);
     flyStage = 0;
@@ -2524,7 +2668,7 @@ RETRO_API void retro_run(void) {
       gbTake = GB_FIELD_TAKE_FRAMES;
     else
       notice(fly_reason(r));
-  } else if (flyCfg && flyStage == 1 && !companion && pk_call_safe(core)) {
+  } else if (flyCfg && flyStage == 1 && !companion_over() && pk_call_safe(core)) {
     snapshot();
     enum fly_result r = fly_start(core, flyCfg, romData, romLen, &snap, flyMapsec, &flyT, flyBusy, flyBattle);
     if (r == FLY_OK) {
@@ -2535,12 +2679,12 @@ RETRO_API void retro_run(void) {
       flyStage = 0;
       notice(fly_reason(r));
     }
-  } else if (flyCfg && flyStage == 2 && !companion && ++flyWait >= FLY_FADE_FRAMES && pk_call_safe(core)) {
+  } else if (flyCfg && flyStage == 2 && !companion_over() && ++flyWait >= FLY_FADE_FRAMES && pk_call_safe(core)) {
     flyStage = 0;
     if (!fly_finish(core, flyCfg, romData, romLen, flyMapsec, &flyT, fly_main_callback(core, flyCfg) != flyCallback))
       notice(fly_reason(FLY_FAILED));
   }
-  if (flashCfg && flashAsk && !companion) {
+  if (flashCfg && flashAsk && !companion_over()) {
     if (pk_call_safe(core)) {
       snapshot();
       enum flash_result r = flash_use(core, flashCfg, romData, romLen, &snap, flyBusy, flyBattle);
@@ -2553,7 +2697,7 @@ RETRO_API void retro_run(void) {
     }
   }
   // pk_call_safe reads the ARM CPU: never on a Game Boy core, whose jobs need no call guard.
-  bool safe = job != JOB_NONE && !companion && (gbf ? true : pk_call_safe(core));
+  bool safe = job != JOB_NONE && !companion_over() && (gbf ? true : pk_call_safe(core));
   if (job == JOB_PC && safe) {
     job = JOB_NONE;
     enum item_result r = gbf ? gb_field_pc(core, gbf, flyBusy) : pc_open(core, game.cfg, romData, romLen, flyBusy, flyBattle);
@@ -2584,7 +2728,7 @@ RETRO_API void retro_run(void) {
       job = JOB_NONE;
       notice(item_reason(r));
     }
-  } else if (job == JOB_BIKE_WAIT && !companion) {
+  } else if (job == JOB_BIKE_WAIT && !companion_over()) {
     // SELECT again if the game dropped it (a bike rolling at full speed ignores it), but only where taking it shows
     // for sure: the riding state flips, or the field's controls stay held.
     if (((fieldFlags & PK_FIELD_BIKE) != 0) != bikeWasRiding || (fieldFlags & PK_FIELD_LOCKED))
@@ -2601,7 +2745,7 @@ RETRO_API void retro_run(void) {
   } else if (job == JOB_BIKE_RESTORE && ++jobFrames >= 20) {
     job = JOB_NONE;
     bike_restore(core, game.cfg, jobItem, bikeOld);
-  } else if ((job == JOB_PC || job == JOB_REPEL || job == JOB_BIKE) && !companion && ++jobFrames > 120) {
+  } else if ((job == JOB_PC || job == JOB_REPEL || job == JOB_BIKE) && !companion_over() && ++jobFrames > 120) {
     job = JOB_NONE;
     notice(item_reason(ITEM_FAILED));
   }
@@ -2621,7 +2765,7 @@ RETRO_API void retro_run(void) {
   int av = 3;
   const bool hidden = realEnv && realEnv(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &av) && !(av & 1);
   if (hidden && canDupe && haveGameFrame) {
-    if (!companion && !(quickOpen && ovPixels))
+    if (!companion_over() && !(quickOpen && ovPixels))
       hud_field_tick(); // as the game's own draw below would
     if (messageFrames > 0)
       messageFrames--; // as present() would: a notice lasts as many game frames hidden or shown
@@ -2632,13 +2776,7 @@ RETRO_API void retro_run(void) {
   }
   PF_T(td0);
   hudNativeOn = false; // the companion or the quick menu has the picture, not the HUD
-  if (companion) {
-    pd_ui_update(&ui, &snap);
-    ui.focusId = focusId;
-    host.ffOn = false;
-    host.hasState = false;
-    host.flightReady = freeFlight && fly_flyer(&snap) >= 0; // MAP's TAKE OFF / LAND
-    host.flying = freeFlight && pk_flight_state() != PK_FLIGHT_IDLE;
+  if (companion_over()) {
     // As a window: the running game under it, dimmed like the app's, and the companion drawn into its own picture.
     const struct pd_canvas gameCanvas = canvas;
     const bool window = companion_window();
@@ -2652,30 +2790,7 @@ RETRO_API void retro_run(void) {
       ui.backdropFrame = &picture;
       ui.backdropX = ui.backdropY = PD_COMPANION_PAD;
     }
-    memset(canvas.px, 0, (size_t)canvas.w * canvas.h * sizeof *canvas.px);
-    // Use the Dex's compact font throughout the GBC Companion. Restore the cart font for the in-game HUD.
-    const bool gen2 = game.cfg && game.cfg->gb && game.cfg->gb->gen == 2;
-    const struct pd_glyph *glyphs = NULL;
-    int glyphCount = 0;
-    if (gen2) {
-      pd_font_get(&glyphs, &glyphCount);
-      pd_font_set(NULL, 0);
-    }
-    // FONT TYPE: PIXEL SMALL (the app's default) or PIXEL, for the companion alone; the HUD and the quick menu keep
-    // Pixel Operator as before.
-    pd_font_size_set(!settings.fontPixel);
-    pd_ui_draw(&ui, &canvas, &game, &snap, &host);
-    pd_font_size_set(0);
-    if (gen2)
-      pd_font_set(glyphs, glyphCount);
-    map_cursor_sync(&ui, &game, &snap);
-    if (ui.tab != PD_TAB_GUIDE || (ui.overlay != PD_OVERLAY_NONE && ui.overlay != PD_OVERLAY_GUIDE_NOTICE)) {
-      const int focus = focus_after_draw(&ui, focus_resolve(&ui));
-      if (ui.overlay != PD_OVERLAY_NONE ||
-          (ui.tab != PD_TAB_SETTINGS && (ui.tab != PD_TAB_PARTY || ui.summarySlot < 0) &&
-           !(ui.tab == PD_TAB_BAG && ui.bagTabs)))
-        focus_draw(&ui, focus);
-    }
+    companion_draw();
     if (window) {
       // The window's edge, the app's WindowFrame: the title window's frame over it, pixel corners (the host draws its shadow).
       ui.backdropFrame = NULL;
@@ -2705,7 +2820,8 @@ RETRO_API void retro_run(void) {
         blend_overlay_area(ovPixels, qc.w, qc.h, ovScratch);
     }
   } else {
-    direct565 = messageFrames == 0;
+    stripRows = hud_strip_step(stripRows, companion && gameH);
+    direct565 = messageFrames == 0 && !stripRows;
     if (direct565)
       draw_game_fast();
     else
@@ -2729,7 +2845,12 @@ RETRO_API void retro_run(void) {
       hudShown = false;
       hudDrawnKey = 0;
     }
+    if (stripRows)
+      draw_strip();
   }
+  // The companion's pictures move slowly: every third frame, unless the pad or a finger is on it.
+  if (secondOn && (companion || second.ptr_down || frames % 3 == 0))
+    second_draw();
   PF_T(td1);
   pf_add(PF_DRAW, td1 - td0);
   // The companion window, for a frontend that shows it (PD_ENV_SET_COMPANION); its answer is the mouse over it, read by
@@ -2737,7 +2858,7 @@ RETRO_API void retro_run(void) {
   if (companionHost && realEnv) {
     struct pd_companion cm;
     memset(&cm, 0, sizeof cm);
-    if (companion && compW > 0 && compPx) {
+    if (companion_over() && compW > 0 && compPx) {
       cm.pixels = compPx;
       cm.src_w = compW;
       cm.src_h = compH;
@@ -2763,7 +2884,7 @@ RETRO_API void retro_run(void) {
     realEnv(PD_ENV_SET_HUD, &hud);
   }
   present();
-  haveGameFrame = !companion && !quickOpen && !hudFocus;
+  haveGameFrame = !companion_over() && !quickOpen && !hudFocus;
   PF_T(td2);
   pf_add(PF_PRESENT, td2 - td1);
   pf_add(PF_TOTAL, td2 - t0);

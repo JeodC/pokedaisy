@@ -2,7 +2,7 @@
 // hand: change those and run `make -C 3ds tables`. The keys the 3DS / Linux code uses, in strcmp order (pd_tr.h).
 #include "pd_tr.h"
 
-const struct pd_tr_entry pd_tr_table[802] = {
+const struct pd_tr_entry pd_tr_table[804] = {
     { "  HACK", { "  HACK", NULL, NULL, NULL, NULL, NULL, NULL } },
     { "  NONE", { "  NONE", "  AUCUN", "  KEINS", "  NESSUNO", "  NINGUNO", "  NENHUM", "  NENHUM" } },
     { "  SHINY", { "  SHINY", "  CHROMATIQUE", "  SCHILLERND", "  CROMATICO", "  VARIOCOLOR", "  BRILHANTE", "  BRILHANTE" } },
@@ -226,6 +226,7 @@ const struct pd_tr_entry pd_tr_table[802] = {
     { "Friendship by night", { "Friendship by night", "Amitié de nuit", "Freundschaft in der Nacht", "Affetto di notte", "Amistad de noche", "Amizade de noite", "Amizade de noite" } },
     { "From %ld to %ld.", { "From %ld to %ld.", "De %ld à %ld.", "Von %ld bis %ld.", "Da %ld a %ld.", "De %ld a %ld.", "De %ld a %ld.", "De %ld a %ld." } },
     { "GAME", { "GAME", "JEU", "SPIEL", "GIOCO", "JUEGO", "JOGO", "JOGO" } },
+    { "GAME SCREEN", { "GAME SCREEN", "ÉCRAN DU JEU", "SPIELBILD", "SCHERMO GIOCO", "PANTALLA JUEGO", "TELA DO JOGO", "ECRÃ DO JOGO" } },
     { "GAME SPEED", { "GAME SPEED", "VITESSE JEU", "SPIELTEMPO", "VELOCITÀ GIOCO", "VEL. JUEGO", "VEL. DO JOGO", "VEL. DO JOGO" } },
     { "GAME VOLUME", { "GAME VOLUME", "VOLUME DU JEU", "SPIEL-LAUTSTÄRKE", "VOLUME GIOCO", "VOLUMEN DEL JUEGO", "VOLUME DO JOGO", "VOLUME DO JOGO" } },
     { "GAMEPLAY", { "GAMEPLAY", NULL, NULL, NULL, "JUGABILIDAD", "JOGABILIDADE", "JOGABILIDADE" } },
@@ -577,6 +578,7 @@ const struct pd_tr_entry pd_tr_table[802] = {
     { "SCREEN", { "SCREEN", "ÉCRAN", "BILDSCHIRM", "SCHERMO", "PANTALLA", "TELA", "ECRÃ" } },
     { "SEARCH", { "SEARCH", "CHERCHER", "SUCHEN", "CERCA", "BUSCAR", "BUSCAR", "PESQUISAR" } },
     { "SECOND GAME", { "SECOND GAME", "SECOND JEU", "ZWEITES SPIEL", "SECONDO GIOCO", "SEGUNDO JUEGO", "SEGUNDO JOGO", "SEGUNDO JOGO" } },
+    { "SECOND SCREEN", { "SECOND SCREEN", "2ND ÉCRAN", "2. BILDSCHIRM", "SECONDO SCHERMO", "2.ª PANTALLA", "SEGUNDA TELA", "SEGUNDO ECRÃ" } },
     { "SEEN", { "SEEN", "VUS", "GESEHEN", "VISTI", "VISTOS", "VISTOS", "VISTOS" } },
     { "SEEN ", { "SEEN ", "VUS ", "GES. ", "VISTI ", "VISTOS ", "VISTOS ", "VISTOS " } },
     { "SEEN %d  OWN %d", { "SEEN %d  OWN %d", "VUS %d  PRIS %d", "GES. %d  BES. %d", "VISTI %d  PRESI %d", "VISTOS %d  CAPT. %d", "VISTOS %d  CAPT. %d", "VISTOS %d  CAPT. %d" } },
@@ -806,4 +808,4 @@ const struct pd_tr_entry pd_tr_table[802] = {
     { "the game.", { "the game.", "dans le jeu.", "im Spiel ab.", "nel gioco.", "en el juego.", "no jogo.", "no jogo." } },
     { "x%d  (a stack holds %d)", { "x%d  (a stack holds %d)", "x%d  (une pile en contient %d)", "x%d  (ein Stapel fasst %d)", "x%d  (una pila ne tiene %d)", "x%d  (un montón lleva %d)", "x%d  (uma pilha tem %d)", "x%d  (uma pilha tem %d)" } },
 };
-const int pd_tr_table_count = 802;
+const int pd_tr_table_count = 804;

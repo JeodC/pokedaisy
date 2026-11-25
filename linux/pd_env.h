@@ -72,6 +72,23 @@ struct pd_front_rows {
   int open_settings;                    /* out: 1 once, when the host's menu asked for the companion's SETTINGS */
 };
 
+/* A second screen (a dual-screen handheld's bottom one, a second monitor) for the companion or a DS's touch screen, with
+ * the game on the first. The core calls it every frame with the picture it drew last, and the host answers with the screen
+ * and the finger on it, in the same struct. A frontend without the command, or one that answers every private command
+ * true, leaves w and h at 0: no second screen. [data] is a pd_second_screen; the pixels stay valid until the core's next
+ * frame or its game's unload. With a [panel] (a DS's touch screen) the picture is ARGB8888 and goes over it, alpha 0 = clear.
+ * The host fills the last two lines. */
+#define PD_ENV_SECOND_SCREEN 0x20006
+struct pd_second_screen {
+  const uint32_t *pixels; /* src_w x src_h, XRGB8888; NULL = black */
+  int src_w, src_h;
+  int changed;            /* it isn't the picture of the call before */
+  const uint32_t *panel;  /* panel_w x panel_h, XRGB8888, shown in the box; NULL = none */
+  int panel_w, panel_h, box_x, box_y, box_w, box_h; /* the box is in the picture's pixels */
+  int w, h;
+  int ptr_x, ptr_y, ptr_down, wheel; /* the finger or mouse in the picture's pixels, the notches since the call before (+ up) */
+};
+
 /* Where the host puts the companion's picture in a ow x oh window: the largest whole scale that keeps it within 94% of the
  * window's height and 97% of its width (at least 1), centred. Shared, so the core sizes the picture (pd_companion_size)
  * for exactly the scale the host draws it at. Returns the scale. */
@@ -130,6 +147,25 @@ static inline int pd_companion_size(int ow, int oh, int maxW, int maxH, int *sw,
   *sw = w + pad2;
   *sh = h + pad2;
   return k;
+}
+
+/* The companion's picture for a w x h second screen: at the largest whole scale that leaves it 320 x minH, or, where that
+ * draws its text too small (48 rows over it: the Thor's 1240x1080), 320 wide or minH tall, scaled by the host. */
+static inline void pd_second_size(int w, int h, int minH, int maxW, int maxH, int *sw, int *sh) {
+  int k = w / 320 < h / minH ? w / 320 : h / minH;
+  if (k < 1)
+    k = 1;
+  *sw = w / k;
+  *sh = h / k;
+  if (*sh > minH + 48) {
+    const int wide = w * minH / h;
+    *sw = wide > 320 ? wide : 320;
+    *sh = wide > 320 ? minH : h * 320 / w;
+  }
+  if (*sw > maxW)
+    *sw = maxW;
+  if (*sh > maxH)
+    *sh = maxH;
 }
 
 #endif

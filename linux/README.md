@@ -105,7 +105,8 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy SDL_RENDER_DRIVER=software POCKET_WI
   linux/build/pokedaisy-linux --data <a scratch folder> --frames 2300 --shot shot.png <rom>
 ```
 
-`POCKET_MOUSE="TICK:X:Y:c"` clicks in window pixels (`:r` a right click). Never point `--data` at your real saves.
+`POCKET_MOUSE="TICK:X:Y:c"` clicks in window pixels (`:r` a right click, `:s` a tap on the second screen that
+`POCKET_SECOND_SCREEN=WxH` opens). Never point `--data` at your real saves.
 
 ## PortMaster (ROCKNIX, Knulli, muOS ...)
 
