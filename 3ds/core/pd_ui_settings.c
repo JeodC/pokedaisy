@@ -152,6 +152,15 @@ static void font_type_row(struct pd_ui* ui, struct pd_canvas* c, int x, int* y, 
 static void flight_area_row(struct pd_ui* ui, struct pd_canvas* c, int x, int* y, int w, const struct pd_settings* st) {
     setting(ui, c, x, y, w, SETTING_FLIGHT_AREA, "FLIGHT AREA", st->flightAnywhere ? "ANYWHERE" : "VISITED");
 }
+static void battle_rows(struct pd_ui* ui, struct pd_canvas* c, int x, int* y, int w, const struct pd_settings* st) {
+    setting(ui, c, x, y, w, SETTING_BATTLE_INFO, "BATTLE INFO", st->noBattleInfo ? "OFF" : "ON");
+    if (!st->noBattleInfo) {
+        setting(ui, c, x, y, w, SETTING_HINTS, "BATTLE HINTS", st->hideHints ? "OFF" : "ON");
+        setting(ui, c, x, y, w, SETTING_BATTLE_VIEW, "BATTLE VIEW", st->battleInfoFirst ? "INFO" : "BUTTONS");
+    }
+    setting(ui, c, x, y, w, SETTING_ONE_TAP, "ONE-TAP MOVES", st->oneTapMoves ? "ON" : "OFF");
+    setting(ui, c, x, y, w, SETTING_BATTLE_STYLE, "BATTLE STYLE", st->battleGen5 ? "GEN 5" : "GEN 4");
+}
 
 static void group(struct pd_canvas* c, int x, int* y, const char* title) {
     title = pd_tr(title);
@@ -270,6 +279,8 @@ static void compact_rows(struct pd_ui* ui, struct pd_canvas* c, int ix, int* yp,
         }
     }
     if (host && host->hasHud) setting(ui, c, ix, yp, iw, SETTING_HUD, "HUD", st->hud ? "ON" : "OFF");
+    if (host && host->hasHideMenu)
+        setting(ui, c, ix, yp, iw, SETTING_HIDE_MENU, "HIDE BATTLE MENU", st->battleMenuShown ? "OFF" : "ON");
     if (host && host->hasDisplayFilter)
         setting(ui, c, ix, yp, iw, SETTING_FILTER, "FILTER", st->lcdFilter ? "LCD" : "OFF");
     front_rows(ui, c, ix, yp, iw, host, "SCREEN");
@@ -292,6 +303,7 @@ static void compact_rows(struct pd_ui* ui, struct pd_canvas* c, int ix, int* yp,
     } else if (host && host->hasFontType)
         font_type_row(ui, c, ix, yp, iw, st);
     pendingGroup = "COMPANION";
+    if (host && host->hasBattleRows) battle_rows(ui, c, ix, yp, iw, st);
     snprintf(buf, sizeof(buf), pd_tr("%d TABS"), ui_bar_count(ui));
     setting(ui, c, ix, yp, iw, SETTING_TAB_BAR, "TAB BAR", buf);
     front_rows(ui, c, ix, yp, iw, host, "COMPANION");
@@ -555,13 +567,7 @@ void ui_settings_tab(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game
             setting(ui, c, ix, &y, iw, SETTING_THEME, "THEME", themeName);
             if (host->hasFontType) font_type_row(ui, c, ix, &y, iw, st);
             group(c, ix, &y, "COMPANION");
-            setting(ui, c, ix, &y, iw, SETTING_BATTLE_INFO, "BATTLE INFO", st->noBattleInfo ? "OFF" : "ON");
-            if (!st->noBattleInfo) {
-                setting(ui, c, ix, &y, iw, SETTING_HINTS, "BATTLE HINTS", st->hideHints ? "OFF" : "ON");
-                setting(ui, c, ix, &y, iw, SETTING_BATTLE_VIEW, "BATTLE VIEW", st->battleInfoFirst ? "INFO" : "BUTTONS");
-            }
-            setting(ui, c, ix, &y, iw, SETTING_ONE_TAP, "ONE-TAP MOVES", st->oneTapMoves ? "ON" : "OFF");
-            setting(ui, c, ix, &y, iw, SETTING_BATTLE_STYLE, "BATTLE STYLE", st->battleGen5 ? "GEN 5" : "GEN 4");
+            battle_rows(ui, c, ix, &y, iw, st);
         }
         // A host without the groups (the libretro cores): AUTO-RUN and DARK MODE here, the full list has them in GAMEPLAY
         // and by THEME.

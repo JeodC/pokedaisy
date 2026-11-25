@@ -102,6 +102,7 @@ struct pd_settings {
     bool battleGen5;  // BATTLE STYLE: GEN 5 (Black / White's touch screen); off = GEN 4
     bool noBattleInfo;    // BATTLE INFO off: the battle buttons alone, no INFO / SUGGESTIONS or move ratings
     bool battleInfoFirst; // BATTLE VIEW: INFO; off = BUTTONS (what the BATTLE tab opens on)
+    bool battleMenuShown; // HIDE BATTLE MENU off
     bool expandOff;       // the one-time switch from 1.6.0's EXPAND to SHARP 1.5x done (1.6.1; ctr/main.c): a later pick stays
     bool flyClassic;      // FLY STYLE: CLASSIC (the game's own FLY); off = SCENIC, flown over the field where the game can
     bool flightAnywhere;  // FLIGHT AREA: ANYWHERE; off = VISITED, the app's WHERE YOU'VE BEEN (only the maps this save has seen)
@@ -214,6 +215,8 @@ struct pd_host_info {
     const char* const* zoomLabels;
     bool hasHud;         // Optional: the host draws the HUD over the game (its SETTINGS row)
     bool hasDisplayFilter; // host implements OFF / LCD
+    bool hasHideMenu;    // Optional: HIDE BATTLE MENU works (a second screen, and a game whose battle menu it knows)
+    bool hasBattleRows;  // Optional: the compact list has the battle buttons' rows (a second screen to have them on)
     bool hasQuickMenu;   // host implements the selectable RING / GRID quick menu
     bool hasButtonRows;  // Optional: QUICK MENU / COMPANION / HUD CURSOR button rows (the host reads settings.*Btn)
     bool hasFfChip;      // Optional: a fast-forward chip on the tab bar (the Linux host's; the 3DS has its own hotkeys)
@@ -477,6 +480,9 @@ struct pd_ui {
     bool pixelOff; // SCREEN doesn't offer PIXEL 1x: EXPAND can't hold its speed that wide
     const struct pd_battle_source* battleSource;
     struct pd_binput* battleInput; // the host's, NULL = no touch controls
+    bool menuOnCompanion; // HIDE BATTLE MENU: the buttons are the game's menu, its cursor on the one at battleCursor
+    int battleCursor;
+    bool battleTapsHeld; // the buttons shown are of a menu the game just closed
     const struct pd_snapshot* drawn; // what the last pd_ui_draw showed, for the taps on it
     const struct pd_game* drawnGame;
     bool hostHasStates;              // the host's STATES tab has slots to show

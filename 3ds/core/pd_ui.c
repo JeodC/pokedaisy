@@ -398,16 +398,22 @@ static int focus_resolve(struct pd_ui* ui) {
     return i;
 }
 
-// AppColors.focusRing, flush inside the element. A party slot shows its own selected look instead (pd_ui.focusId).
-static void focus_ring(struct pd_ui* ui, struct pd_canvas* c) {
-    int i = focus_resolve(ui);
+// AppColors.focusRing, flush inside the element.
+void ui_ring(const struct pd_ui* ui, struct pd_canvas* c, int id) {
+    int i = focus_index(ui, id);
     if (i < 0) return;
     const struct pd_hit* h = &ui->hits[i];
-    if (h->id >= HIT_SLOT && h->id < HIT_SLOT + PD_PARTY_SIZE) return;
     pd_fill(c, h->x, h->y, h->w, 2, 0xFF7331);
     pd_fill(c, h->x, h->y + h->h - 2, h->w, 2, 0xFF7331);
     pd_fill(c, h->x, h->y, 2, h->h, 0xFF7331);
     pd_fill(c, h->x + h->w - 2, h->y, 2, h->h, 0xFF7331);
+}
+
+// A party slot shows its own selected look instead (pd_ui.focusId).
+static void focus_ring(struct pd_ui* ui, struct pd_canvas* c) {
+    focus_resolve(ui);
+    if (ui->focusId >= HIT_SLOT && ui->focusId < HIT_SLOT + PD_PARTY_SIZE) return;
+    ui_ring(ui, c, ui->focusId);
 }
 
 const struct pd_game* ui_game;
@@ -647,7 +653,8 @@ static void act(struct pd_ui* ui, int id) {
                id == HIT_SETTING + SETTING_BATTLE_STYLE || id == HIT_SETTING + SETTING_BATTLE_INFO ||
                id == HIT_SETTING + SETTING_BATTLE_VIEW || id == HIT_SETTING + SETTING_FLY_STYLE ||
                id == HIT_SETTING + SETTING_FLIGHT_AREA || id == HIT_SETTING + SETTING_REUSABLE_TMS ||
-               id == HIT_SETTING + SETTING_INSTANT_TEXT || id == HIT_SETTING + SETTING_TRADE_EVOS) {
+               id == HIT_SETTING + SETTING_INSTANT_TEXT || id == HIT_SETTING + SETTING_TRADE_EVOS ||
+               id == HIT_SETTING + SETTING_HIDE_MENU) {
         struct pd_settings* st = ui->settings;
         bool* flag = id == HIT_SETTING + SETTING_MUTE ? &st->gameMuted : id == HIT_SETTING + SETTING_WILD ? &st->wildOff
             : id == HIT_SETTING + SETTING_AUTO_RUN ? &st->autoRun : id == HIT_SETTING + SETTING_RUN_INDOORS ? &st->runIndoors
@@ -656,6 +663,7 @@ static void act(struct pd_ui* ui, int id) {
             : id == HIT_SETTING + SETTING_FLY_STYLE ? &st->flyClassic : id == HIT_SETTING + SETTING_FLIGHT_AREA ? &st->flightAnywhere
             : id == HIT_SETTING + SETTING_REUSABLE_TMS ? &st->reusableTms
             : id == HIT_SETTING + SETTING_INSTANT_TEXT ? &st->instantText : id == HIT_SETTING + SETTING_TRADE_EVOS ? &st->tradeEvos
+            : id == HIT_SETTING + SETTING_HIDE_MENU ? &st->battleMenuShown
             : &st->battleGen5;
         *flag = !*flag;
         ui->action = PD_ACTION_SETTINGS_CHANGED;

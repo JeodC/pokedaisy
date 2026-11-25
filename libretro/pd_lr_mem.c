@@ -31,3 +31,10 @@ bool pd_lr_read_memory(void *ctx, uint32_t a, void *out, size_t n) {
     p[i] = c->busRead8(c, a + (uint32_t)i);
   return true;
 }
+
+bool pd_lr_write_memory(void *ctx, uint32_t a, const void *in, size_t n) {
+  struct mCore *c = ctx;
+  for (size_t i = 0; i < n; i++)
+    c->busWrite8(c, a + (uint32_t)i, ((const unsigned char *)in)[i]);
+  return true;
+}

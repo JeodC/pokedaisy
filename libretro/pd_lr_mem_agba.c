@@ -8,10 +8,9 @@
 #include <stdint.h>
 #include <string.h>
 
-bool pd_lr_read_memory(void *ctx, uint32_t a, void *out, size_t n) {
-  (void)ctx;
+static const uint8_t *span(uint32_t a, size_t n) {
   if (!gba || !n)
-    return false;
+    return NULL;
   const uint8_t *base;
   size_t size, off;
   switch (a >> 24) {
@@ -31,10 +30,23 @@ bool pd_lr_read_memory(void *ctx, uint32_t a, void *out, size_t n) {
     off = a & 0x01ffffffu;
     break;
   default:
-    return false;
+    return NULL;
   }
-  if (!base || off > size || n > size - off)
-    return false;
-  memcpy(out, base + off, n);
-  return true;
+  return base && off <= size && n <= size - off ? base + off : NULL;
+}
+
+bool pd_lr_read_memory(void *ctx, uint32_t a, void *out, size_t n) {
+  (void)ctx;
+  const uint8_t *p = span(a, n);
+  if (p)
+    memcpy(out, p, n);
+  return p != NULL;
+}
+
+bool pd_lr_write_memory(void *ctx, uint32_t a, const void *in, size_t n) {
+  (void)ctx;
+  uint8_t *p = a >> 24 <= 3 ? (uint8_t *)span(a, n) : NULL;
+  if (p)
+    memcpy(p, in, n);
+  return p != NULL;
 }

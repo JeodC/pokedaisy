@@ -107,7 +107,7 @@ extern const struct pd_text pd_text_soulgold_v1_2_1;
 // FireRed rev 0 and LeafGreen: the tabs that read RAM (and the MAP, whose art is found by fingerprint)
 // and the party icons. The FOE TEAM's addresses are known for rev 1 only. Retail FireRed rev 0 as the app
 // reads it: no POKéDEX / GUIDE tables (none on file for rev 0), its trainer card set in code (Poller.kt), the
-// quick menu from FIELD_ITEMS_PORTS["BPRE0"] (fieldItemsFor).
+// quick menu from FIELD_ITEMS_PORTS["BPRE0"] (fieldItemsFor). The battle menus' cursors are its _retail configs'.
 // gamedata/gen3/retail/firered.toml: firered_rev1 (ram, foes, icons, dex, guide, card, fly, flight, flash, tm, field, battle, engine, boxes, dexsec, tradeevo)
 static const struct pd_config PD_CONFIG_FIRERED_REV1 = {
     .itemDescs = &(const struct pd_item_descs){ .base = 138260632, .stride = 44, .descOff = 20, .idOff = 14 },
@@ -664,8 +664,8 @@ static const struct pd_config PD_CONFIG_FIRERED_REV0 = {
     .handleInputChooseTarget = 0x0802e674,
     .completeWhenChoseItem = 0x0803073c,
     .waitForMonSelection = 0x08030684,
-    .actionCursor = 0,
-    .moveCursor = 0,
+    .actionCursor = 0x02023FF8,
+    .moveCursor = 0x02023FFC,
     .partyMenu = 0,
     .monStride = 100,
     .saveBlock1PosOff = 0,
@@ -956,8 +956,8 @@ static const struct pd_config PD_CONFIG_LEAFGREEN_REV0 = {
     .handleInputChooseTarget = 0x0802e674,
     .completeWhenChoseItem = 0x0803073c,
     .waitForMonSelection = 0x08030684,
-    .actionCursor = 0,
-    .moveCursor = 0,
+    .actionCursor = 0x02023FF8,
+    .moveCursor = 0x02023FFC,
     .partyMenu = 0,
     .monStride = 100,
     .saveBlock1PosOff = 0,
@@ -1264,8 +1264,8 @@ static const struct pd_config PD_CONFIG_LEAFGREEN_REV1 = {
     .handleInputChooseTarget = 0x0802e688,
     .completeWhenChoseItem = 0x08030750,
     .waitForMonSelection = 0x08030698,
-    .actionCursor = 0,
-    .moveCursor = 0,
+    .actionCursor = 0x02023FF8,
+    .moveCursor = 0x02023FFC,
     .partyMenu = 0,
     .monStride = 100,
     .saveBlock1PosOff = 0,

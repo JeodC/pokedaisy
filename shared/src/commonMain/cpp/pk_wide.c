@@ -3561,6 +3561,48 @@ static void menuHideEnd(struct GBAVideoRenderer* r) {
     menuHideRow = -1;
 }
 
+// menuHideBegin's writes with no renderer behind them: the palette entries it sets are kept, the rest is read back from RAM.
+static uint16_t paintPal[16];
+static unsigned paintPalSet;
+
+static void paintVRAM(struct GBAVideoRenderer* r, uint32_t address) { (void) r; (void) address; }
+
+static void paintOAM(struct GBAVideoRenderer* r, uint32_t oam) { (void) r; (void) oam; }
+
+static void paintPalette(struct GBAVideoRenderer* r, uint32_t address, uint16_t value) {
+    (void) r;
+    paintPal[address >> 1 & 15] = value;
+    paintPalSet |= 1u << (address >> 1 & 15);
+}
+
+/** For a core whose lines can't be hooked (armGBA), after each frame: the menu's rows over [px], RGB565, [stride] pixels a
+ * line. Nothing on the others. */
+void pk_battle_menu_paint(struct mCore* core, uint16_t* px, int stride) {
+    if (!lineHookless || !menuHideMode || !core) return;
+    static struct GBAVideoRenderer r = { .writeOAM = paintOAM, .writePalette = paintPalette };
+    hookGba = (struct GBA*) core->board;
+    origWriteVRAM = paintVRAM;
+    paintPalSet = 0;
+    menuHideBegin(&r);
+    if (menuHideRow >= 0) {
+        const uint8_t* vram = (const uint8_t*) hookGba->video.vram;
+        const uint16_t* map = (const uint16_t*) (vram + menuHideMap) + menuHideRow * 32;
+        const uint32_t charOff = ((hookGba->memory.io[0x08 >> 1] >> 2) & 3) * 0x4000u;
+        for (int y = 0; y < 48; y++)
+            for (int x = 0; x < PK_WIDE_W; x++) {
+                const uint16_t cell = map[y / 8 * 32 + x / 8];
+                const int i = menuCellPx(vram, charOff, cell, x & 7, y & 7);
+                if (!i) continue;
+                const uint16_t c = cell >> 12 == menuPalSlot && (paintPalSet >> i & 1) ? paintPal[i]
+                    : hookGba->video.palette[(cell >> 12) * 16 + i];
+                px[(112 + y) * stride + x] = (uint16_t) ((c & 31) << 11 | (c >> 5 & 31) << 6 | (c >> 9 & 1) << 5 | (c >> 10 & 31));
+            }
+    }
+    menuHideEnd(&r);
+    hookGba = NULL;
+    origWriteVRAM = NULL;
+}
+
 int pk_battle_menu_hidden(void) {
     return menuHideMode ? menuHidden : 0;
 }

@@ -2,7 +2,7 @@
 // hand: change those and run `make -C 3ds tables`. The keys the 3DS / Linux code uses, in strcmp order (pd_tr.h).
 #include "pd_tr.h"
 
-const struct pd_tr_entry pd_tr_table[812] = {
+const struct pd_tr_entry pd_tr_table[813] = {
     { "  HACK", { "  HACK", NULL, NULL, NULL, NULL, NULL, NULL } },
     { "  NONE", { "  NONE", "  AUCUN", "  KEINS", "  NESSUNO", "  NINGUNO", "  NENHUM", "  NENHUM" } },
     { "  SHINY", { "  SHINY", "  CHROMATIQUE", "  SCHILLERND", "  CROMATICO", "  VARIOCOLOR", "  BRILHANTE", "  BRILHANTE" } },
@@ -268,6 +268,7 @@ const struct pd_tr_entry pd_tr_table[812] = {
     { "HIDDEN POWER  %s", { "HIDDEN POWER  %s", "PUISSANCE CACHÉE  %s", "KRAFTRESERVE  %s", "INTROFORZA  %s", "POD. OCULTO  %s", "PODER OCULTO  %s", "PODER OCULTO  %s" } },
     { "HIDDEN POWER  %s %d", { "HIDDEN POWER  %s %d", "PUISSANCE CACHÉE  %s %d", "KRAFTRESERVE  %s %d", "INTROFORZA  %s %d", "POD. OCULTO  %s %d", "PODER OCULTO  %s %d", "PODER OCULTO  %s %d" } },
     { "HIDE", { "HIDE", "MASQUER", "AUSBLENDEN", "NASCONDI", "OCULTAR", "OCULTAR", "OCULTAR" } },
+    { "HIDE BATTLE MENU", { "HIDE BATTLE MENU", "CACHER MENU COMBAT", "KAMPFMENÜ AUSBLENDEN", "NASCONDI MENU LOTTA", "OCULTAR MENÚ COMBATE", "OCULTAR MENU BATALHA", "OCULTAR MENU BATALHA" } },
     { "HINT", { "HINT", "INDICE", "TIPP", "INDIZIO", "PISTA", "DICA", "DICA" } },
     { "HINT: %s", { "HINT: %s", "INDICE : %s", "TIPP: %s", "INDIZIO: %s", "PISTA: %s", "DICA: %s", "DICA: %s" } },
     { "HMs", { "HMs", "CS", "VMs", "MN", "MO", "MOs", "MOs" } },
@@ -816,4 +817,4 @@ const struct pd_tr_entry pd_tr_table[812] = {
     { "the game.", { "the game.", "dans le jeu.", "im Spiel ab.", "nel gioco.", "en el juego.", "no jogo.", "no jogo." } },
     { "x%d  (a stack holds %d)", { "x%d  (a stack holds %d)", "x%d  (une pile en contient %d)", "x%d  (ein Stapel fasst %d)", "x%d  (una pila ne tiene %d)", "x%d  (un montón lleva %d)", "x%d  (uma pilha tem %d)", "x%d  (uma pilha tem %d)" } },
 };
-const int pd_tr_table_count = 812;
+const int pd_tr_table_count = 813;

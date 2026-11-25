@@ -34,6 +34,7 @@ void pd_settings_defaults(struct pd_settings* s) {
     s->oneTapMoves = false;
     s->battleGen5 = false;
     s->noBattleInfo = false;
+    s->battleMenuShown = false;
     s->battleInfoFirst = false;
     s->flyClassic = false;
     s->expandOff = false;
@@ -157,6 +158,7 @@ bool pd_settings_load(struct pd_settings* s, const char* path) {
                     : !strcmp(key, "instanttext") ? &s->instantText : !strcmp(key, "tradeevos") ? &s->tradeEvos
                     // FLIGHT AREA: "flightanywhere" as the Linux / libretro hosts write it, "flyanywhere" as 3DS builds did
                     : !strcmp(key, "flightanywhere") || !strcmp(key, "flyanywhere") ? &s->flightAnywhere
+                    : !strcmp(key, "menushown") ? &s->battleMenuShown
                     : !strcmp(key, "expandoff") ? &s->expandOff : NULL;
             if (b && int_in(value, 0, 1, &on)) *b = on;
         }
@@ -193,7 +195,8 @@ bool pd_settings_save(const struct pd_settings* s, const char* path) {
     fprintf(f, "librarygrid=%d\nlibraryrecent=%d\n", s->libraryGrid, s->libraryRecent);
     fprintf(f, "speed=%d\nvolume=%d\nnohints=%d\nonetap=%d\nmute=%d\nautorun=%d\nperf=%d\n", s->gameSpeed,
             s->gameVolume, s->hideHints, s->oneTapMoves, s->gameMuted, s->autoRun, s->showPerf ? 1 : 0);
-    fprintf(f, "gen5=%d\nnoinfo=%d\ninfofirst=%d\n", s->battleGen5 ? 1 : 0, s->noBattleInfo ? 1 : 0, s->battleInfoFirst ? 1 : 0);
+    fprintf(f, "gen5=%d\nnoinfo=%d\ninfofirst=%d\nmenushown=%d\n", s->battleGen5 ? 1 : 0, s->noBattleInfo ? 1 : 0,
+            s->battleInfoFirst ? 1 : 0, s->battleMenuShown ? 1 : 0);
     fprintf(f, "flyclassic=%d\nflightanywhere=%d\nflyon=%d\n", s->flyClassic ? 1 : 0, s->flightAnywhere ? 1 : 0, s->flightVehicle);
     fprintf(f, "reusabletms=%d\ninstanttext=%d\ntradeevos=%d\n", s->reusableTms ? 1 : 0, s->instantText ? 1 : 0, s->tradeEvos ? 1 : 0);
     fprintf(f, "expandoff=%d\nlang=%s\n", s->expandOff ? 1 : 0, pd_lang_code(s->language));

@@ -45,6 +45,7 @@
 #include "pd_fs.h"
 
 bool pd_lr_read_memory(void *ctx, uint32_t a, void *out, size_t n);
+bool pd_lr_write_memory(void *ctx, uint32_t a, const void *in, size_t n);
 
 /* ---- keys: the retropad, as the SDL host's key enum numbers them (A..L are mGBA's own key bits) ---- */
 enum { A, B, SELECT, START, RIGHT, LEFT, UP, DOWN, R, L, X, Y, L2, R2, MENU, L3, NKEYS };
@@ -784,7 +785,10 @@ static int gbTake;
 static bool gbWildHeld;
 static size_t romLen;
 static bool polishedActions;
-static struct pd_binput polishedInput;
+static struct pd_binput battleInput;
+static int menuHidden; // HIDE BATTLE MENU: pk_battle_menu_hidden
+#define MENU_GAP 30
+static int menuGap; // frames since a battle menu closed
 
 static int polished_byte(uint32_t addr) {
   uint8_t v = 0;
@@ -801,8 +805,8 @@ static void polished_open_pc(void) {
 }
 
 static void polished_use(int item) {
-  if (!pd_binput_field_start(&polishedInput, PD_FIELD_USE, item, 0))
-    notice(pd_field_input_message(&polishedInput.field));
+  if (!pd_binput_field_start(&battleInput, PD_FIELD_USE, item, 0))
+    notice(pd_field_input_message(&battleInput.field));
 }
 
 static bool polished_potion(int item) {
@@ -810,7 +814,13 @@ static bool polished_potion(int item) {
 }
 
 
-static void snapshot(void) { pd_snapshot_read(&snap, &game, pd_lr_read_memory, core); }
+static void snapshot(void) {
+  const enum pd_battle_state was = snap.valid ? snap.battleState : PD_BATTLE_NONE;
+  pd_snapshot_read(&snap, &game, pd_lr_read_memory, core);
+  // The app's GB_MENU_GAP_MS: the companion keeps a battle menu through the game's gap before the next.
+  if (secondOn && snap.battleState == PD_BATTLE_BUSY && was >= PD_BATTLE_ACTION && menuGap < MENU_GAP)
+    snap.battleState = was;
+}
 
 /* pk_flight told the profile's words with FLY ON's vehicle (again only when it changed). */
 static void flight_configure_words(void) {
@@ -1431,6 +1441,14 @@ RETRO_API void retro_get_system_av_info(struct retro_system_av_info *info) {
   info->geometry.aspect_ratio = (float)CW / (float)CH;
 }
 
+// The battle's buttons: Polished Crystal's, and any game's with a second screen to be on.
+static void battle_input_reset(void) {
+  pd_binput_init(&battleInput, &game, pd_lr_read_memory, PD_BE_IS_GBA() ? pd_lr_write_memory : NULL, core);
+  ui.battleInput = polishedActions || (secondOn && pd_binput_available(&battleInput)) ? &battleInput : NULL;
+  ui.battleChoosingMove = ui.battleChoosingMon = false;
+  menuGap = 0;
+}
+
 RETRO_API bool retro_load_game(const struct retro_game_info *g) {
   /* LANGUAGE's AUTO with no game language the menus have: the frontend's. */
   unsigned lang = RETRO_LANGUAGE_ENGLISH;
@@ -1597,10 +1615,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info *g) {
     ovScratch = calloc((size_t)CANVAS_MAX_W * CANVAS_MAX_H, sizeof *ovScratch);
   pd_ui_init(&ui, &settings);
   ui.handheldDex = ui.handheldParty = ui.guideController = ui.shoulderTabs = true;
-  if (polishedActions) {
-    pd_binput_init(&polishedInput, &game, pd_lr_read_memory, NULL, core);
-    ui.battleInput = &polishedInput;
-  }
+  battle_input_reset();
   memset(&host, 0, sizeof host);
   host.hideScreenMode = true;
   host.hasQuickMenu = true;
@@ -1647,10 +1662,7 @@ static void layer_jump(void) {
   gameKeyFrames = 0;
   shortcutExclusive = false;
   shortcutBlocked = polishedActions ? held : 0;
-  if (polishedActions) {
-    pd_binput_init(&polishedInput, &game, pd_lr_read_memory, NULL, core);
-    ui.battleChoosingMove = ui.battleChoosingMon = false;
-  }
+  battle_input_reset();
   gbWildHeld = gbf != NULL; // a state taken while OFF carries the held rates: put back once when ON
 }
 
@@ -1892,6 +1904,25 @@ static void companion_draw(void) {
   }
 }
 
+// HIDE BATTLE MENU (the app's battleMenuHideSupported): FireRed, LeafGreen, Emerald, Ruby and Sapphire's battles and those of
+// the hacks the app runs as FireRed or Emerald, where the companion's buttons can steer them and their cursor is known.
+static bool menu_known(void) {
+  static const char *const codes[] = {"BPR", "BPG", "BPE", "AXV", "AXP"};
+  static const enum pd_guide_id hacks[] = {PD_GUIDE_EMERALD_LEGACY, PD_GUIDE_EMERALD_KAIZO, PD_GUIDE_RECHARGED_EMERALD, PD_GUIDE_ROCKET_EDITION,
+                                           PD_GUIDE_ASH_GRAY, PD_GUIDE_GHOST_GREY, PD_GUIDE_LETS_GO, PD_GUIDE_ULTRA_VIOLET};
+  if (!PD_BE_IS_GBA() || !pd_binput_available(&battleInput) || !game.cfg->actionCursor)
+    return false;
+  for (size_t i = 0; i < sizeof hacks / sizeof *hacks; i++)
+    if (game.guide == hacks[i])
+      return true;
+  // Only English FireRed and Emerald are told from a hack by hash (pd_game_identify).
+  if (!game.retail && (!strcmp(game.code, "BPRE") || !strcmp(game.code, "BPEE")))
+    return false;
+  for (size_t i = 0; i < sizeof codes / sizeof *codes; i++)
+    if (!memcmp(game.code, codes[i], 3))
+      return true;
+  return false;
+}
 static void second_poll(void) {
   if (!realEnv || !realEnv(PD_ENV_SECOND_SCREEN, &second))
     second.w = second.h = 0;
@@ -1902,7 +1933,32 @@ static void second_poll(void) {
     companion = secondTouchWas = false;
     pd_ui_touch_cancel(&ui);
     second.pixels = NULL;
+    battle_input_reset();
+    host.hasHideMenu = on && menu_known();
+    host.hasBattleRows = on && ui.battleInput;
   }
+}
+static bool menu_gap(void) { return secondOn && menuGap && menuGap < MENU_GAP && snap.battleState >= PD_BATTLE_ACTION; }
+static void menu_hide(void) {
+  const bool on = host.hasHideMenu && !settings.battleMenuShown;
+  if (on || menuHidden)
+    pk_battle_menu_hide(core, !on ? 0 : second.above ? 2 : 1, game.cfg->battleTypeFlags);
+  if (on)
+    pk_battle_menu_paint(core, outputBuffer, 256);
+  menuHidden = on ? pk_battle_menu_hidden() : 0;
+  ui.menuOnCompanion = on;
+  if (!menu_gap())
+    ui.battleCursor = on ? pd_binput_cursor(&battleInput) : -1;
+}
+// The D-pad goes round the companion's buttons, which aren't where the unseen menu has them. The moves are.
+static void menu_steer(void) {
+  unsigned dirs = 0, fresh = 0;
+  for (int k = RIGHT; k <= DOWN; k++) {
+    dirs |= held & 1u << k;
+    fresh |= heldFrames[k] == 1 ? 1u << k : 0; // one step a press
+  }
+  if (menuHidden == 160 && !companion && !quickOpen && !hudFocus && dirs && (!fresh || pd_binput_steer(&battleInput, (int)fresh)))
+    shortcutBlocked |= dirs;
 }
 static void second_touch(void) {
   // Nothing is pressed while the quick menu or the HUD's cursor pauses the game its action would wait for: one that came up
@@ -1983,11 +2039,12 @@ RETRO_API void retro_run(void) {
   PD_BE_INPUT_POLL();
   poll_keys();
   shortcutBlocked &= held;
-  const bool fieldRunning = polishedActions && polishedInput.field.result == PD_FIELD_RUNNING;
-  const bool inputRunning = polishedActions && pd_binput_exclusive(&polishedInput);
+  const bool fieldRunning = polishedActions && battleInput.field.result == PD_FIELD_RUNNING;
+  const bool inputRunning = ui.battleInput && pd_binput_exclusive(&battleInput);
+  const enum pd_battle_state battleWas = battleInput.state;
   if (fieldRunning && down(B)) {
-    pd_binput_cancel(&polishedInput);
-    notice(pd_field_input_message(&polishedInput.field));
+    pd_binput_cancel(&battleInput);
+    notice(pd_field_input_message(&battleInput.field));
   }
   const bool airborne = freeFlight && pk_flight_state() != PK_FLIGHT_IDLE;
   if (inputRunning || airborne)
@@ -2048,8 +2105,10 @@ RETRO_API void retro_run(void) {
     }
   }
   bool wasCompanion = companion;
-  if (secondOn)
+  if (secondOn) {
     second_keys();
+    menu_steer();
+  }
   if (down(companionBtn) && !hudFocus && (!secondOn || companion || second_takes())) {
     companion = !companion;
     quickOpen = flyList = repelList = false;
@@ -2215,8 +2274,8 @@ RETRO_API void retro_run(void) {
       if (polishedActions) {
         quickOpen = false;
         shortcutBlocked |= held; // the A that picked it stays out of the game
-        if (!pd_binput_field_start(&polishedInput, PD_FIELD_FLY, 0, 0))
-          notice(pd_field_input_message(&polishedInput.field));
+        if (!pd_binput_field_start(&battleInput, PD_FIELD_FLY, 0, 0))
+          notice(pd_field_input_message(&battleInput.field));
       } else
         flyAsk = 1; // answered below, between two frames
     } else if (down(A) && !quick[quickSel].why && quick[quickSel].action == QUICK_REPEL && repelKindCount > 1) {
@@ -2338,11 +2397,11 @@ RETRO_API void retro_run(void) {
       const char *why = pd_field_input_reason(game.sha1, pd_lr_read_memory, core);
       if (why)
         notice(why);
-      else if (pd_binput_field_start(&polishedInput, ui.bagSelected >= 0 ? PD_FIELD_ITEM : PD_FIELD_BAG,
+      else if (pd_binput_field_start(&battleInput, ui.bagSelected >= 0 ? PD_FIELD_ITEM : PD_FIELD_BAG,
                                     ui.bagItemShown, 0))
         companion = false;
       else
-        notice(pd_field_input_message(&polishedInput.field));
+        notice(pd_field_input_message(&battleInput.field));
     } else if (mapHandled) {
       if (closeMap) companion = false;
     } else if (backing && ui.tab == PD_TAB_BAG && ui.bagTabs && ui.overlay == PD_OVERLAY_NONE) {
@@ -2352,7 +2411,7 @@ RETRO_API void retro_run(void) {
     } else if (backing) {
       const bool places = ui.overlay == PD_OVERLAY_PLACES;
       const int slot = ui.tab == PD_TAB_PARTY ? ui.summarySlot : -1;
-      if (polishedActions && ui.tab == PD_TAB_BATTLE && (ui.battleChoosingMove || ui.battleChoosingMon))
+      if (ui.battleInput && ui.tab == PD_TAB_BATTLE && (ui.battleChoosingMove || ui.battleChoosingMon))
         ui.battleChoosingMove = ui.battleChoosingMon = false;
       else if (!pd_ui_back(&ui))
         companion = false;
@@ -2467,7 +2526,7 @@ RETRO_API void retro_run(void) {
       break;
     case PD_ACTION_ITEM_APPLY:
       if (polishedActions && !pd_field_input_reason(game.sha1, pd_lr_read_memory, core) &&
-          pd_binput_field_start(&polishedInput, PD_FIELD_HEAL, ui.itemId, ui.itemSlot))
+          pd_binput_field_start(&battleInput, PD_FIELD_HEAL, ui.itemId, ui.itemSlot))
         companion = false;
       else if (polishedActions)
         notice("Potion unavailable");
@@ -2510,7 +2569,7 @@ RETRO_API void retro_run(void) {
       ff = false;
     rewinding = got && th.mode == RETRO_THROTTLE_REWINDING;
   }
-  if (polishedActions && companion && pd_binput_busy(&polishedInput))
+  if (ui.battleInput && companion && pd_binput_busy(&battleInput))
     companion = false; // The native battle / Bag / party resumes with the selected action.
   // The companion as a window keeps the game running under it, as the app's does (its keys stay the companion's).
   const bool companionRuns = companion && (secondOn || companion_window());
@@ -2533,13 +2592,14 @@ RETRO_API void retro_run(void) {
       pd_settings_save(&settings, settingsPath);
       notice("Wild encounters restored");
     }
-    const bool fieldStarted = polishedActions && polishedInput.field.result == PD_FIELD_RUNNING;
-    if (polishedActions) {
+    const bool fieldStarted = polishedActions && battleInput.field.result == PD_FIELD_RUNNING;
+    if (ui.battleInput) {
       if (rewinding)
-        pd_binput_cancel(&polishedInput);
+        pd_binput_cancel(&battleInput);
       else
-        shortcutKeys = pd_binput_tick(&polishedInput, &shortcutExclusive);
-      shortcutExclusive |= inputRunning || (!rewinding && (shortcutKeys || pd_binput_exclusive(&polishedInput)));
+        shortcutKeys = pd_binput_tick(&battleInput, &shortcutExclusive);
+      menuGap = battleInput.state == PD_BATTLE_BUSY ? menuGap + 1 : 0;
+      shortcutExclusive |= inputRunning || (!rewinding && (shortcutKeys || pd_binput_exclusive(&battleInput)));
       if (rewinding)
         shortcutKeys = 0;
       if (shortcutExclusive)
@@ -2554,11 +2614,12 @@ RETRO_API void retro_run(void) {
     PF_T(pa);
     mgba_retro_run();
     autoRunFlip = 0;
+    menu_hide();
     if (freeFlight)
       pk_flight_tick(core);
     PF_T(pb);
-    if (fieldStarted && polishedInput.field.result != PD_FIELD_RUNNING && polishedInput.field.result != PD_FIELD_CANCELLED) {
-      notice(pd_field_input_message(&polishedInput.field));
+    if (fieldStarted && battleInput.field.result != PD_FIELD_RUNNING && battleInput.field.result != PD_FIELD_CANCELLED) {
+      notice(pd_field_input_message(&battleInput.field));
       snapshot();
     }
     pf_add(PF_RUN, pb - pa);
@@ -2590,7 +2651,9 @@ RETRO_API void retro_run(void) {
     PD_BE_AUDIO(silence, 549);
   }
 
-  if (!snap.valid || (companion && !wasCompanion) || (!companion_over() && frames % 30 == 0))
+  ui.battleTapsHeld = menu_gap();
+  if (!snap.valid || (companion && !wasCompanion) || (!companion_over() && frames % 30 == 0) ||
+      (secondOn && (battleInput.state != battleWas || menuGap == MENU_GAP)))
     snapshot();
   companionWas = companion;
   frames++;
@@ -2758,12 +2821,15 @@ RETRO_API void retro_run(void) {
     pf_frame();
     return;
   }
+  // The companion's pictures move slowly: every third frame, unless the pad or a finger is on it.
+  if (secondOn && (companion || second.ptr_down || frames % 3 == 0))
+    second_draw();
   // A frame the frontend will not show (video bit clear, as diatom's fast-forward skip asks): the game and the layer's
   // logic ran, the drawing is left out. Only the video bit counts: a fast-forward flag alone still shows its frames.
   // A dupe needs what `repeat` needs: a frontend that takes one and a frame sent at this geometry (canvas_update clears
   // it), else the frame is drawn and sent as usual.
   int av = 3;
-  const bool hidden = realEnv && realEnv(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &av) && !(av & 1);
+  const bool hidden = battleInput.holdFrame || (realEnv && realEnv(RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE, &av) && !(av & 1));
   if (hidden && canDupe && haveGameFrame) {
     if (!companion_over() && !(quickOpen && ovPixels))
       hud_field_tick(); // as the game's own draw below would
@@ -2848,9 +2914,6 @@ RETRO_API void retro_run(void) {
     if (stripRows)
       draw_strip();
   }
-  // The companion's pictures move slowly: every third frame, unless the pad or a finger is on it.
-  if (secondOn && (companion || second.ptr_down || frames % 3 == 0))
-    second_draw();
   PF_T(td1);
   pf_add(PF_DRAW, td1 - td0);
   // The companion window, for a frontend that shows it (PD_ENV_SET_COMPANION); its answer is the mouse over it, read by

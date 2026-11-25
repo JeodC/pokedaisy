@@ -413,6 +413,12 @@ bool ui_battle_controls_usable(const struct pd_ui* ui, const struct pd_snapshot*
     }
 }
 
+// HIDE BATTLE MENU: the button the game's cursor is on.
+static void cursor_ring(const struct pd_ui* ui, struct pd_canvas* c, enum pd_battle_state state) {
+    static const int ACTIONS[4] = { HIT_BATTLE_FIGHT, HIT_BATTLE_BAG, HIT_BATTLE_POKEMON, HIT_BATTLE_RUN };
+    ui_ring(ui, c, state == PD_BATTLE_ACTION ? ACTIONS[ui->battleCursor & 3] : HIT_BATTLE_MOVE + ui->battleCursor);
+}
+
 void ui_battle_controls(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, const struct pd_snapshot* s) {
     bool busy = busy_now(ui);
     bool hints = ui_battle_hints_on(ui);
@@ -454,6 +460,7 @@ void ui_battle_controls(struct pd_ui* ui, struct pd_canvas* c, const struct pd_g
                       HIT_BATTLE_CANCEL, !busy);
         }
     }
+    if (ui->menuOnCompanion && !busy && ui->battleCursor >= 0) cursor_ring(ui, c, state);
     if (busy) {
         // "Your tap registered, the game just hasn't caught up yet" (ProcessingBall).
         int size = 34, x = (c->w - size) / 2, y = (c->h - size) / 2;
@@ -477,11 +484,13 @@ bool ui_battle_controls_act(struct pd_ui* ui, int id, const struct pd_snapshot* 
         return true;
     }
     if (id < HIT_BATTLE_FIGHT || id >= HIT_BATTLE_MOVE + PD_NUM_MOVES) return false;
-    if (pd_binput_busy(b)) return true;
+    if (pd_binput_busy(b) || ui->battleTapsHeld) return true;
     switch (id) {
     case HIT_BATTLE_FIGHT:
-        // FIGHT opens our move grid at once, from the moves already read: no wait for the game's move screen.
-        ui->battleChoosingMove = true;
+        // FIGHT opens our move grid at once, from the moves already read: no wait for the game's move screen. With the game's
+        // menu hidden it's the game's that opens, so the pad works on what's shown.
+        if (ui->menuOnCompanion) pd_binput_action(b, PD_ACT_FIGHT);
+        else ui->battleChoosingMove = true;
         break;
     case HIT_BATTLE_BAG:
         pd_binput_action(b, PD_ACT_BAG);
@@ -491,7 +500,7 @@ bool ui_battle_controls_act(struct pd_ui* ui, int id, const struct pd_snapshot* 
         ui->ranAway = true;
         break;
     case HIT_BATTLE_POKEMON:
-        if (pd_binput_can_switch(b)) ui->battleChoosingMon = true;
+        if (pd_binput_can_switch(b) && !ui->menuOnCompanion) ui->battleChoosingMon = true;
         else pd_binput_action(b, PD_ACT_POKEMON);
         break;
     case HIT_BATTLE_CANCEL:

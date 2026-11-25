@@ -80,6 +80,8 @@ enum pd_battle_state pd_binput_state(const struct pd_binput* b);
 // pd_binput_busy also counts (a pending move, a target confirm), which must never lock the player out.
 bool pd_binput_exclusive(const struct pd_binput* b);
 bool pd_binput_busy(const struct pd_binput* b);
+int pd_binput_cursor(const struct pd_binput* b);
+bool pd_binput_steer(struct pd_binput* b, int key);
 
 // The field and battle actions use the same key queue and cannot run concurrently.
 enum pd_field_request { PD_FIELD_BAG, PD_FIELD_ITEM, PD_FIELD_USE, PD_FIELD_HEAL, PD_FIELD_FLY };

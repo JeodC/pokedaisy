@@ -248,6 +248,7 @@ void pk_battle_menu_hide(struct mCore* core, int mode, uint32_t battleTypeFlags)
 /** Which battle menu HIDE BATTLE MENU hid on the last frame drawn: 160 = the action menu, 320 = the moves, 0 = none (off,
  * not a battle menu, a double battle / the Safari Zone, or a shape it didn't know). */
 int pk_battle_menu_hidden(void);
+void pk_battle_menu_paint(struct mCore* core, uint16_t* px, int stride);
 /** Why the menu hidden on the last frame had no two-screens sign (0 = it had one): 1 no room in the box, 2 too few
  * free tiles, 3 the tiles in use on screen, 4 the text's colours not found. For logs. */
 int pk_battle_menu_sign_why(void);

@@ -432,7 +432,7 @@ dexMapGroups = 'guideTables.mapGroups'
 # FireRed rev 0 and LeafGreen: the tabs that read RAM (and the MAP, whose art is found by fingerprint)
 # and the party icons. The FOE TEAM's addresses are known for rev 1 only. Retail FireRed rev 0 as the app
 # reads it: no POKéDEX / GUIDE tables (none on file for rev 0), its trainer card set in code (Poller.kt), the
-# quick menu from FIELD_ITEMS_PORTS["BPRE0"] (fieldItemsFor).
+# quick menu from FIELD_ITEMS_PORTS["BPRE0"] (fieldItemsFor). The battle menus' cursors are its _retail configs'.
 [config.firered_rev1]
 name = 'FIRERED_REV1'
 parts = ['ram', 'foes', 'icons', 'dex', 'guide', 'card', 'fly', 'flight', 'flash', 'tm', 'field', 'battle', 'engine', 'boxes', 'dexsec', 'tradeevo']
@@ -444,17 +444,19 @@ name = 'FIRERED_REV0'
 parts = ['ram', 'icons', 'dex', 'card', 'fly', 'flight', 'flash', 'tm', 'field', 'battle', 'engine', 'boxes']
 records = { items = 'FIELD_ITEMS_PORTS_BPRE0', flash = 'FLASH_FIRERED_REV0', tm = 'TM_FIRERED_REV0' }
 set = { trainerCard = 'TRAINER_CARD_FIRERED' }
-values = { pokemonStoragePtr = 0x03005010 }
+values = { pokemonStoragePtr = 0x03005010, actionCursor = 0x02023FF8, moveCursor = 0x02023FFC }
 
 [config.leafgreen_rev0]
 name = 'LEAFGREEN_REV0'
 parts = ['ram', 'icons', 'dex', 'guide', 'card', 'fly', 'flight', 'flash', 'tm', 'field', 'battle', 'engine', 'boxes', 'dexsec', 'tradeevo']
 records = { items = 'FIELD_ITEMS_LEAFGREEN_REV0', flash = 'FLASH_LEAFGREEN_REV0', tm = 'TM_LEAFGREEN_REV0', tradeevo = 'TRADE_EVO_LEAFGREEN_REV0' }
+values = { actionCursor = 0x02023FF8, moveCursor = 0x02023FFC }
 
 [config.leafgreen_rev1]
 name = 'LEAFGREEN_REV1'
 parts = ['ram', 'foes', 'icons', 'dex', 'guide', 'card', 'fly', 'flight', 'flash', 'tm', 'field', 'battle', 'engine', 'boxes', 'dexsec', 'tradeevo']
 records = { items = 'FIELD_ITEMS_LEAFGREEN_REV1', flash = 'FLASH_LEAFGREEN_REV1', tm = 'TM_LEAFGREEN_REV1', tradeevo = 'TRADE_EVO_LEAFGREEN_REV1' }
+values = { actionCursor = 0x02023FF8, moveCursor = 0x02023FFC }
 
 [config.emerald_retail]
 name = 'EMERALD'

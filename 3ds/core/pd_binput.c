@@ -127,6 +127,10 @@ static void pick_cell(struct pd_binput* b, int cell, bool move) {
     b->pickPresses = 0;
 }
 
+static uint32_t cursor_addr(const struct pd_binput* b, bool move) {
+    return (move ? b->cfg->moveCursor : b->cfg->actionCursor) + (uint32_t) b->battler;
+}
+
 static void pick_fallback(struct pd_binput* b) {
     int cell = b->pickCell;
     b->pickCell = -1;
@@ -138,7 +142,7 @@ static void pick_fallback(struct pd_binput* b) {
 // press toward it (a dropped one is pressed again).
 static void drive_pick(struct pd_binput* b) {
     if (b->pickCell < 0) return;
-    uint32_t addr = (b->pickMove ? b->cfg->moveCursor : b->cfg->actionCursor) + (uint32_t) b->battler;
+    uint32_t addr = cursor_addr(b, b->pickMove);
     uint8_t cur = 0xFF;
     if (!b->read(b->ctx, addr, &cur, 1) || cur > 3) {
         pick_fallback(b);
@@ -163,6 +167,24 @@ static void drive_pick(struct pd_binput* b) {
     }
     if ((cur & 1) != (b->pickCell & 1)) press(b, b->pickCell & 1 ? PD_KEY_RIGHT : PD_KEY_LEFT);
     else press(b, (b->pickCell >> 1) > (cur >> 1) ? PD_KEY_DOWN : PD_KEY_UP);
+}
+
+// 0 FIGHT, 1 BAG, 2 POKéMON, 3 RUN, or a move's cell. -1 = neither menu is up, or their cursors aren't known.
+int pd_binput_cursor(const struct pd_binput* b) {
+    const bool move = b->state == PD_BATTLE_MOVE;
+    uint8_t cell;
+    if (!b->cfg || b->gb || !b->cfg->actionCursor || !b->cfg->moveCursor || (!move && b->state != PD_BATTLE_ACTION)) return -1;
+    return b->read(b->ctx, cursor_addr(b, move), &cell, 1) && cell < 4 ? cell : -1;
+}
+
+// HiddenMenuSteer: FIGHT over BAG, RUN and POKéMON. False = the game's menu takes the press.
+bool pd_binput_steer(struct pd_binput* b, int key) {
+    const int cell = pd_binput_cursor(b);
+    if (b->state != PD_BATTLE_ACTION || cell < 0 || !b->write || exclusive(b)) return false;
+    static const int8_t LEFT[4] = { 1, 1, 3, 1 }, RIGHT[4] = { 2, 3, 2, 2 };
+    const uint8_t next = (uint8_t) (key & PD_KEY_UP ? 0 : key & PD_KEY_DOWN ? (cell ? cell : 3)
+                                    : key & PD_KEY_LEFT ? LEFT[cell] : key & PD_KEY_RIGHT ? RIGHT[cell] : cell);
+    return next == cell || b->write(b->ctx, cursor_addr(b, false), &next, 1);
 }
 
 static void end_switch(struct pd_binput* b) {

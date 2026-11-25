@@ -148,6 +148,7 @@ enum setting_row {
     SETTING_ONE_TAP,
     SETTING_BATTLE_STYLE,
     SETTING_BATTLE_INFO,
+    SETTING_HIDE_MENU,
     SETTING_BATTLE_VIEW,
     SETTING_FLY_STYLE,
     SETTING_FLIGHT_AREA,
@@ -234,6 +235,7 @@ void ui_box_message(struct pd_ui* ui, struct pd_canvas* c);
 void ui_mon_summary(struct pd_ui* ui, struct pd_canvas* c, const struct pd_game* g, const struct pd_snapshot* s, const struct pd_mon* m,
                     const struct pd_mon* const* column, int columnCount, int shown, bool canTake, const char* pcLabel);
 void ui_overlay(struct pd_ui* ui, struct pd_canvas* c);
+void ui_ring(const struct pd_ui* ui, struct pd_canvas* c, int id);
 // TAB BAR's / HUD's / MORE's rows: row i picked.
 void ui_toggle_act(struct pd_ui* ui, int i);
 // The tabs off the bar (MORE's list), in the bar's order.

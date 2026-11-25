@@ -310,6 +310,11 @@ but doesn't see your buttons:
 They also come back by themselves when a battle starts or the game opens a screen of its own. In a text box, a menu or a
 battle X doesn't take them, but you can still touch the companion.
 
+In a battle the companion has `FIGHT`, `BAG`, `POKéMON` and `RUN`, then your moves, to pick with a finger. The game's own
+menu leaves its screen in [the games that can hide it](battle.md#on-two-screens-hide-battle-menu), and your D-pad and A work
+on the companion's buttons. To see the game's menu again, turn off `HIDE BATTLE MENU`, under `SCREEN` in the companion's
+`SETTINGS`. `BATTLE INFO`, `BATTLE HINTS`, `BATTLE VIEW`, `ONE-TAP MOVES` and `BATTLE STYLE` are under `COMPANION` there.
+
 A DS game has its top screen on the first screen and its touch screen on the second, with your finger as the stylus. Tap
 `COMPANION` under the touch screen and the companion takes its place. `GAME SCREEN` in the same spot brings the touch screen
 back, and PokeDaisy remembers which of the two you had. L2 switches them too and your buttons go with it. B with nothing
