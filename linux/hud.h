@@ -58,11 +58,12 @@ void hud_focus_draw(struct pd_canvas *, const struct hud_hits *, int focus);
 bool hud_draw(struct pd_canvas *c, const struct pd_game *g, const struct pd_snapshot *s, const struct hud_state *h,
               const struct pd_settings *st, struct hud_hits *out);
 /* The silver strip along the bottom of the game's picture (x, y, w, h) while the buttons are on a second screen's companion,
- * its arrow pointing there (CompanionFocus.kt). [k] canvas pixels a game pixel, [shown] of its rows up, [tick] in frames. */
+ * its arrow pointing there (CompanionFocus.kt): along the top with the companion [above]. [k] canvas pixels a game pixel,
+ * [shown] of its rows up, [tick] in frames. */
 #define HUD_STRIP_ROWS 22
 int hud_strip_step(int shown, bool up);
-bool hud_strip_hit(int y, int h, int k, int shown, int ty);
-void hud_strip_draw(struct pd_canvas *c, int x, int y, int w, int h, int k, int shown, int tick);
+bool hud_strip_hit(int y, int h, int k, int shown, bool above, int ty);
+void hud_strip_draw(struct pd_canvas *c, int x, int y, int w, int h, int k, int shown, bool above, int tick);
 void hud_switch_draw(struct pd_canvas *c, int x, int y, int w, int h, bool tab, bool onCompanion, bool pressed);
 
 /* DS uses the same HUD widgets with cartridge art and the companion's controller shortcuts. */

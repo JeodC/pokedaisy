@@ -27,6 +27,7 @@
 #include <unistd.h>
 
 #include "cover_png.h"
+#include "library_media.h"
 #include "pd_fs.h"
 #include "pd_games.h"
 #include "pd_icons_gen.h"
@@ -74,6 +75,7 @@ struct game {
   char coverFile[PATH_MAX]; // DATA/covers/<file>.png: a fetched cover
   bool coverFit;            // a box (no square icon on SteamGridDB): drawn whole
   char code[5];             // a DS cart's game code
+  struct media media;
 };
 
 static struct game *games;
@@ -97,6 +99,8 @@ static int faceColors = 1;
 static int faceColors;
 #endif
 static int selected, scroll, columns = 4, menuCursor, settingsCursor, settingsScroll, toolCursor;
+static int rowStep, rowTall; // a row of games as last drawn, with the gap under it and without
+static bool dragged;         // the list is where a finger left it, not at the cursor
 static const char *picked;
 static char notice[96];
 static unsigned noticeUntil;
@@ -340,6 +344,55 @@ static bool is_png(const char *path) {
   return n > 4 && !strcasecmp(path + n - 4, ".png") && !stat(path, &st);
 }
 
+static void set_once(char **at, const char *value) {
+  if (!*at && *value)
+    *at = strdup(value);
+}
+
+static void media_art(struct game *g, int art, const char *path) {
+  if (!g->media.art[art] && is_png(path))
+    set_once(&g->media.art[art], path);
+}
+
+static void gamelist_path(char *out, size_t n, const char *dir, const char *value) {
+  if (value[0] == '/')
+    snprintf(out, n, "%s", value);
+  else
+    snprintf(out, n, "%s/%s", dir, value[0] == '.' && value[1] == '/' ? value + 2 : value);
+}
+
+// A gamelist.xml tag, and the end of the scraper's file name.
+static const struct {
+  const char *name;
+  int art;
+} ARTS[] = {{"fanart", ART_FANART}, {"marquee", ART_LOGO}, {"image", ART_SCREEN}};
+
+static void media_read(struct game *g, const char *at, const char *end, const char *dir) {
+  static const struct { const char *tag; int fact; } FACTS[] = {
+      {"developer", FACT_DEVELOPER}, {"publisher", FACT_PUBLISHER}, {"genre", FACT_GENRE}, {"players", FACT_PLAYERS}};
+  static char value[8192];
+  char full[PATH_MAX * 2];
+  for (size_t i = 0; i < sizeof ARTS / sizeof *ARTS; i++)
+    if (xml_tag(at, end, ARTS[i].name, value, PATH_MAX)) {
+      gamelist_path(full, sizeof full, dir, value);
+      media_art(g, ARTS[i].art, full);
+    }
+  for (size_t i = 0; i < sizeof FACTS / sizeof *FACTS; i++)
+    if (xml_tag(at, end, FACTS[i].tag, value, sizeof value))
+      set_once(&g->media.fact[FACTS[i].fact], value);
+  if (xml_tag(at, end, "releasedate", value, sizeof value) && strlen(value) >= 8 && strncmp(value, "0000", 4)) {
+    snprintf(full, sizeof full, "%.4s-%.2s-%.2s", value, value + 4, value + 6);
+    set_once(&g->media.fact[FACT_RELEASED], full);
+  }
+  // 0 to 1 there, out of 20 here.
+  if (xml_tag(at, end, "rating", value, sizeof value) && atof(value) > 0) {
+    snprintf(full, sizeof full, "%d / 20", (int)(atof(value) * 20 + 0.5));
+    set_once(&g->media.fact[FACT_RATING], full);
+  }
+  if (xml_tag(at, end, "desc", value, sizeof value))
+    set_once(&g->media.story, value);
+}
+
 static void gamelist_read(const char *dir) {
   char path[PATH_MAX];
   snprintf(path, sizeof path, "%s/gamelist.xml", dir);
@@ -376,12 +429,11 @@ static void gamelist_read(const char *dir) {
         if (!xml_tag(at, end, ART[k], value, sizeof value))
           continue;
         char full[PATH_MAX * 2];
-        snprintf(full, sizeof full, "%s/%s", dir, value[0] == '.' && value[1] == '/' ? value + 2 : value);
-        if (value[0] == '/')
-          snprintf(full, sizeof full, "%s", value);
+        gamelist_path(full, sizeof full, dir, value);
         if (is_png(full))
           snprintf(g->coverPath, sizeof g->coverPath, "%s", full);
       }
+      media_read(g, at, end, dir);
       if (!g->favSet && xml_tag(at, end, "favorite", value, sizeof value))
         g->fav = !strcmp(value, "true");
       if (!g->played && xml_tag(at, end, "lastplayed", value, sizeof value)) {
@@ -400,20 +452,29 @@ static void gamelist_read(const char *dir) {
   free(xml);
 }
 
-/* A game EmulationStation never listed: its scraper's file name in an images/ folder beside any of the games. */
+/* A game EmulationStation never listed: its scraper's file names in an images/ folder beside any of the games. */
 static void cover_guess(struct game *g) {
   char base[256];
   snprintf(base, sizeof base, "%s", g->file);
   char *dot = strrchr(base, '.');
   if (dot)
     *dot = 0;
-  for (int i = 0; i < gameCount && !g->coverPath[0]; i++) {
+  char looked[PATH_MAX] = "";
+  for (int i = 0; i < gameCount && (!g->coverPath[0] || !g->media.art[ART_SCREEN]); i++) {
     char dir[PATH_MAX];
     snprintf(dir, sizeof dir, "%s", games[i].path);
     char *slash = strrchr(dir, '/');
     if (!slash)
       continue;
     *slash = 0;
+    if (!strcmp(dir, looked))
+      continue;
+    snprintf(looked, sizeof looked, "%s", dir);
+    for (size_t k = 0; k < sizeof ARTS / sizeof *ARTS; k++) {
+      char path[PATH_MAX * 2];
+      snprintf(path, sizeof path, "%s/images/%s-%s.png", dir, base, ARTS[k].name);
+      media_art(g, ARTS[k].art, path);
+    }
     static const char *const KIND[] = {"thumb"};
     for (size_t k = 0; k < 1 && !g->coverPath[0]; k++) {
       char path[PATH_MAX * 2];
@@ -1153,6 +1214,7 @@ void library_open(char *const *paths, int count, const char *data, const char *s
   if (!curlLock)
     curlLock = SDL_CreateMutex();
   worker = gameCount && curlLock ? SDL_CreateThread(work, "library", NULL) : NULL;
+  media_open();
 }
 
 void library_close(void) {
@@ -1162,8 +1224,11 @@ void library_close(void) {
     SDL_WaitThread(worker, NULL);
     worker = NULL;
   }
-  for (int i = 0; games && i < gameCount; i++)
+  media_close();
+  for (int i = 0; games && i < gameCount; i++) {
     free(games[i].coverPx);
+    media_free(&games[i].media);
+  }
   free(games);
   games = NULL;
   gameCount = shownCount = 0;
@@ -1387,6 +1452,7 @@ static void move_games(unsigned down) {
 void library_keys(unsigned down) {
   if (!down)
     return;
+  dragged = false;
   if (searchOpen) { // the controller while the field is open (Steam's keyboard types): A / B / START close it
     if (down & (LIB_A | LIB_B | LIB_START | LIB_MENU)) {
       searchOpen = false;
@@ -1484,7 +1550,9 @@ void library_keys(unsigned down) {
     settingsCursor = 0;
     return;
   }
-  if (down & LIB_X) {
+  if ((down & LIB_X) && host->swap)
+    host->swap();
+  else if (down & LIB_X) {
     grid = !grid;
     state_save();
   }
@@ -1888,6 +1956,31 @@ static void title_line(struct pd_canvas *c, const struct game *g, int x, int y, 
     mono(c, &SAVE_ICON, ix + 2, y + 4, 1, PD_LABEL);
 }
 
+static int between(int v, int lo, int hi) { return v > hi ? hi : v < lo ? lo : v; }
+
+static void list_place(int step, int tall) {
+  const int top = selected / columns * step, end = (shownCount - 1) / columns * step + tall - contentH;
+  rowStep = step;
+  rowTall = tall;
+  scroll = dragged ? between(scroll, 0, end > 0 ? end : 0) : between(scroll, top + tall - contentH, top);
+}
+
+// The cursor comes along, to the nearest row at least half in view.
+void library_drag(int dy) {
+  if (menuOpen || closeAsk || sortOpen || infoOpen)
+    return;
+  dragged = true;
+  if (page == P_SETTINGS)
+    settingsScroll -= dy;
+  if (page != P_GAMES || !shownCount || !rowStep)
+    return;
+  list_place(rowStep, rowTall);
+  scroll -= dy;
+  list_place(rowStep, rowTall);
+  const int row = between(selected / columns, (scroll + rowStep / 2) / rowStep, (scroll + contentH - rowTall / 2) / rowStep);
+  selected = between(row * columns + selected % columns, 0, shownCount - 1);
+}
+
 static void draw_games(struct pd_canvas *c) {
   if (!shownCount) {
     int f = pd_list_box(c, contentX, contentY, contentW, 44);
@@ -1902,11 +1995,8 @@ static void draw_games(struct pd_canvas *c) {
     if (columns < 2)
       columns = 2;
     int tw = (contentW - (columns - 1) * GAP) / columns, f = 3, cs = tw - 2 * (f + 3), th = 2 * f + 3 + cs + 3 + 18 + 1;
-    int rowH = th + GAP, row = selected / columns;
-    if (row * rowH < scroll)
-      scroll = row * rowH;
-    if (row * rowH + th > scroll + contentH)
-      scroll = row * rowH + th - contentH;
+    int rowH = th + GAP;
+    list_place(rowH, th);
     for (int i = 0; i < shownCount; i++) {
       int x = contentX + (i % columns) * (tw + GAP), y = contentY + (i / columns) * rowH - scroll;
       if (y + th < contentY || y > contentY + contentH)
@@ -1923,10 +2013,7 @@ static void draw_games(struct pd_canvas *c) {
   } else {
     columns = 1;
     int rh = 46, rowH = rh + 6;
-    if (selected * rowH < scroll)
-      scroll = selected * rowH;
-    if (selected * rowH + rh > scroll + contentH)
-      scroll = selected * rowH + rh - contentH;
+    list_place(rowH, rh);
     for (int i = 0; i < shownCount; i++) {
       int y = contentY + i * rowH - scroll;
       if (y + rh < contentY || y > contentY + contentH)
@@ -1968,10 +2055,12 @@ static void draw_settings(struct pd_canvas *c) {
     lines++;
   }
   int viewH = contentH - 2 * f;
-  if (cursorLine * rowH < settingsScroll)
+  if (!dragged && cursorLine * rowH < settingsScroll)
     settingsScroll = cursorLine * rowH - rowH;
-  if ((cursorLine + 1) * rowH > settingsScroll + viewH)
+  if (!dragged && (cursorLine + 1) * rowH > settingsScroll + viewH)
     settingsScroll = (cursorLine + 1) * rowH - viewH;
+  if (settingsScroll > lines * rowH - viewH)
+    settingsScroll = lines * rowH - viewH;
   if (settingsScroll < 0)
     settingsScroll = 0;
   f = pd_list_box(c, contentX, contentY, contentW, contentH);
@@ -2134,16 +2223,37 @@ static void draw_info(struct pd_canvas *c, const struct game *g) {
   }
 }
 
+static void media_cartridge(struct pd_canvas *c, int id, int x, int y, int s) { category_art(c, &games[id], x, y, s); }
+
+// ARGB8888, with the pictures over and under it.
+bool library_media(struct pd_canvas *c, const struct second_picture **pics, int *count) {
+  const struct game *g = selected < shownCount ? &games[shown[selected]] : NULL;
+  pd_look_apply(NULL, &settings);
+  struct media_game m = {.id = -1, .cartridge = media_cartridge};
+  char played[16];
+  if (g) {
+    m.id = (int)(g - games);
+    m.title = g->title;
+    m.cover = g->coverPath[0] ? g->coverPath : g->coverFile;
+    m.media = &g->media;
+    m.save = g->hasSave;
+    snprintf(played, sizeof played, "%04d-%02d-%02d", (int)(g->played / 10000000000ull), (int)(g->played / 100000000ull % 100),
+             (int)(g->played / 1000000ull % 100));
+    m.played = g->played ? played : NULL;
+  }
+  return media_draw(c, &m, pics, count);
+}
+
 bool library_dimmed(void) { return menuOpen || closeAsk || sortOpen || infoOpen; }
 
 void library_draw_top(struct pd_canvas *c, uint32_t clear) {
   pd_fill(c, 0, 0, c->w, c->h, clear);
   // The button legend, floating bottom right (the launcher's ButtonLegend).
   if (!menuOpen && !closeAsk && !sortOpen && !infoOpen) {
-    static const char *const GAMES_LEGEND[][2] = {{"A", "OPEN"}, {"B", "OPTIONS"}, {"Y", "SETTINGS"}};
+    static const char *const GAMES_LEGEND[][2] = {{"A", "OPEN"}, {"B", "OPTIONS"}, {"Y", "SETTINGS"}, {"X", "SWAP"}};
     static const char *const PAGE_LEGEND[][2] = {{"A", "CHOOSE"}, {"B", "BACK"}};
     bool gamesPage = page == P_GAMES;
-    int n = gamesPage ? 3 : 2, w = 10;
+    int n = !gamesPage ? 2 : host->swap ? 4 : 3, w = 10;
     for (int i = 0; i < n; i++)
       w += 22 + pd_text_width(pd_tr(gamesPage ? GAMES_LEGEND[i][1] : PAGE_LEGEND[i][1])) + 10;
     int h = 28, x = c->w - M - w, y = c->h - M - h;
@@ -2353,6 +2463,7 @@ void library_pointer(int x, int y, bool click, int wheel) {
   }
   if (!wheel)
     return;
+  dragged = false;
   int steps = wheel > 0 ? wheel : -wheel, dir = wheel > 0 ? -1 : 1;
   if (steps > 20)
     steps = 20;

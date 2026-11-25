@@ -39,7 +39,7 @@ file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/../app/build.gradle.kts POCKET_VERSION_
 string(REGEX MATCH "\"[^\"]+\"" POCKET_VERSION "${POCKET_VERSION_LINE}")
 # The resource script embeds the manifest (per-monitor DPI awareness): rebuild it when the manifest changes.
 set_source_files_properties(pokedaisy.rc PROPERTIES OBJECT_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/pokedaisy.manifest)
-add_executable(PokeDaisy ../linux/main.c ../linux/library.c ../linux/cover_png.c ../linux/display_filter.c ../linux/rom_zip.c ../linux/second_screen.c ../linux/shared_save.c ../3ds/desktop/pd_png.c ${PD_CORE} pokedaisy.rc)
+add_executable(PokeDaisy ../linux/main.c ../linux/library.c ../linux/library_media.c ../linux/cover_png.c ../linux/display_filter.c ../linux/rom_zip.c ../linux/second_screen.c ../linux/shared_save.c ../3ds/desktop/pd_png.c ${PD_CORE} pokedaisy.rc)
 target_include_directories(PokeDaisy PRIVATE
   ../3ds/core
   ../third_party/mgba/src/platform/libretro # libretro.h

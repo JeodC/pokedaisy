@@ -235,11 +235,12 @@ and `HACKS`.
 | A | Plays the game. |
 | B | The game's menu: `PLAY`, `FAVORITE` or `UNFAVORITE`, `INFO` (the file, its folder and size, the console, its SHA-1 and where its save is) and `HIDE`, which takes it off the list until `SETTINGS` > `HIDDEN GAMES` puts every hidden game back. |
 | Y | `SETTINGS`. |
-| X | Switches between covers and a list. |
+| X | Switches between covers and a list. With a [second screen](#two-screens), trades the two screens instead. |
 | L, R | The previous or next view. |
 | START, or START and SELECT together, or Menu / Guide | Closes PokeDaisy (it asks first). |
 
-With a mouse, a click plays a game, a right click opens its menu, and the wheel scrolls the list.
+With a mouse, a click plays a game, a right click opens its menu, and the wheel scrolls the list. On a touch screen, tap a
+game to play it, hold your finger on it for its menu, and drag the list to scroll it.
 
 The header's magnifier (or A on it) opens `SEARCH`: type and the list keeps only the games whose name has those
 letters. Enter or a click elsewhere leaves the field with the list still filtered, Escape clears it. On a Steam Deck in
@@ -318,9 +319,16 @@ Set `DS TOUCH SCREEN` to `STRETCH` and the touch screen fills the second screen.
 edge, halfway down. All of this is `DS LAYOUT`'s `TWO SCREENS`. Any other layout has both of the DS's screens on the first
 one and the companion always on the second.
 
-`SECOND SCREEN`, in the game list's `SETTINGS` or the companion's, turns it on or off. It starts on where the firmware
-says the device has two screens (ROCKNIX does), and off on a computer with two monitors. With one screen the row isn't
-there. It has been tried on an AYN Thor and an Anbernic RG DS, both running ROCKNIX. DS games on Windows don't use it yet.
+In the game list the second screen shows the game under the cursor: its cover, logo and screenshot, when it came out and who
+made it, when you last played it, whether it has a save, and its story scrolling by. The logo, the screenshot, the facts and
+the story come from your firmware's scraper, and a game it hasn't scraped goes without them. X trades the two screens, and
+PokeDaisy remembers where you left the list. The view button in the header still switches between covers and a list.
+
+`SECOND SCREEN`, in the game list's `SETTINGS` or the companion's, is `ON`, `SWAPPED` (the game on the second screen and the
+companion or the DS touch screen on the first, with the silver strip along the top of the game) or `OFF`. It starts on `ON`
+where the firmware says the device has two screens (ROCKNIX does), and on `OFF` on a computer with two monitors. With one
+screen the row isn't there. This has been tried on an AYN Thor and an Anbernic RG DS, both running ROCKNIX. DS games on
+Windows don't use the second screen yet.
 
 ## Controls
 
@@ -396,7 +404,7 @@ own rows sit in those groups too: `FF SPEED` and `REWIND` under `FF / SPEED`, `L
 | `FF SPEED` | How fast fast-forward goes: `MAX`, or 2x to 8x. |
 | `REWIND` | `ON` keeps the last 20 seconds or so to rewind through. |
 | `LCD FILTER` | A screen texture like a handheld's. |
-| `SECOND SCREEN` | `ON` uses your second screen, where there's one. See [Two screens](#two-screens). |
+| `SECOND SCREEN` | `ON` uses your second screen, where there's one, and `SWAPPED` puts the game on it. See [Two screens](#two-screens). |
 | `KEYBOARD` | Which key does what (below). Opens its page over the game; B goes back to `SETTINGS`. |
 | `HOTKEYS` | Buttons for fast-forward, rewind and states (below). Opens its page the same way. |
 

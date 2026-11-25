@@ -2,7 +2,7 @@
 // hand: change those and run `make -C 3ds tables`. The keys the 3DS / Linux code uses, in strcmp order (pd_tr.h).
 #include "pd_tr.h"
 
-const struct pd_tr_entry pd_tr_table[804] = {
+const struct pd_tr_entry pd_tr_table[812] = {
     { "  HACK", { "  HACK", NULL, NULL, NULL, NULL, NULL, NULL } },
     { "  NONE", { "  NONE", "  AUCUN", "  KEINS", "  NESSUNO", "  NINGUNO", "  NENHUM", "  NENHUM" } },
     { "  SHINY", { "  SHINY", "  CHROMATIQUE", "  SCHILLERND", "  CROMATICO", "  VARIOCOLOR", "  BRILHANTE", "  BRILHANTE" } },
@@ -153,6 +153,7 @@ const struct pd_tr_entry pd_tr_table[804] = {
     { "DEFENSE", { "DEFENSE", "DÉFENSE", "VERT.", "DIFESA", "DEFENSA", "DEFESA", "DEFESA" } },
     { "DEPOSIT", { "DEPOSIT", "DÉPOSER", "ABLEGEN", "DEPOSITA", "DEJAR", "DEPOSITAR", "DEPOSITAR" } },
     { "DEV LINK", { "DEV LINK", "LIEN DEV", "DEV-LINK", "LINK DEV", "ENLACE DEV", "LINK DEV", "LIGAÇÃO DEV" } },
+    { "DEVELOPER", { "DEVELOPER", "DÉVELOPPEUR", "ENTWICKLER", "SVILUPPATORE", "DESARROLLADOR", "DESENVOLVEDOR", "PROGRAMADOR" } },
     { "DEX", { "DEX", NULL, NULL, NULL, NULL, NULL, NULL } },
     { "DISCARD CHANGES?", { "DISCARD CHANGES?", "ABANDONNER LES CHANGEMENTS ?", "ÄNDERUNGEN VERWERFEN?", "SCARTARE LE MODIFICHE?", "¿DESCARTAR LOS CAMBIOS?", "DESCARTAR AS MUDANÇAS?", "DESCARTAR AS ALTERAÇÕES?" } },
     { "DOCK", { "DOCK", "BARRE", "LEISTE", "BARRA", "BARRA", "BARRA", "BARRA" } },
@@ -236,6 +237,7 @@ const struct pd_tr_entry pd_tr_table[804] = {
     { "GEN 4", { "GEN 4", "GÉN. 4", "GEN. 4", "GEN. 4", "GEN. 4", "GER. 4", "GER. 4" } },
     { "GEN 5", { "GEN 5", "GÉN. 5", "GEN. 5", "GEN. 5", "GEN. 5", "GER. 5", "GER. 5" } },
     { "GENDER", { "GENDER", "SEXE", "GESCHLECHT", "SESSO", "SEXO", "GÊNERO", "GÉNERO" } },
+    { "GENRE", { "GENRE", NULL, NULL, "GENERE", "GÉNERO", "GÊNERO", "GÉNERO" } },
     { "GET OFF", { "GET OFF", "DESCENDRE", "ABSTEIGEN", "SCENDI", "BAJAR", "DESCER", "DESCER" } },
     { "GIFT POKéMON", { "GIFT POKéMON", "POKéMON OFFERTS", "GESCHENK-POKéMON", "POKéMON IN DONO", "POKéMON REGALADOS", "POKéMON DE PRESENTE", "POKéMON OFERECIDOS" } },
     { "GIVE", { "GIVE", "DONNER", "GEBEN", "DAI", "DAR", "DAR", "DAR" } },
@@ -392,6 +394,7 @@ const struct pd_tr_entry pd_tr_table[804] = {
     { "NATIONAL DEX", { "NATIONAL DEX", "DEX NATIONAL", "NATIONAL-DEX", "DEX NAZIONALE", "DEX NACIONAL", "DEX NACIONAL", "DEX NACIONAL" } },
     { "NATURE", { "NATURE", NULL, "WESEN", "NATURA", "NATURALEZA", "NATUREZA", "NATUREZA" } },
     { "NEUTRAL", { "NEUTRAL", "NEUTRE", NULL, "NEUTRA", "NEUTRO", "NEUTRO", "NEUTRO" } },
+    { "NEVER", { "NEVER", "JAMAIS", "NIE", "MAI", "NUNCA", "NUNCA", "NUNCA" } },
     { "NEW", { "NEW", "NOUVEAU", "NEU", "NUOVO", "NUEVO", "NOVO", "NOVO" } },
     { "NEW RUN", { "NEW RUN", "NOUVEAU DÉFI", "NEUER LAUF", "NUOVA SFIDA", "NUEVO RETO", "NOVO DESAFIO", "NOVO DESAFIO" } },
     { "NEW RUN?", { "NEW RUN?", "NOUVEAU DÉFI ?", "NEUER LAUF?", "NUOVA SFIDA?", "¿NUEVO RETO?", "NOVO DESAFIO?", "NOVO DESAFIO?" } },
@@ -496,6 +499,7 @@ const struct pd_tr_entry pd_tr_table[804] = {
     { "PLACES", { "PLACES", "LIEUX", "ORTE", "LUOGHI", "LUGARES", "LUGARES", "LUGARES" } },
     { "PLAY", { "PLAY", "JOUER", "SPIELEN", "GIOCA", "JUGAR", "JOGAR", "JOGAR" } },
     { "PLAYER", { "PLAYER", "JOUEUR", "SPIELER", "GIOCATORE", "JUGADOR", "JOGADOR", "JOGADOR" } },
+    { "PLAYERS", { "PLAYERS", "JOUEURS", "SPIELER", "GIOCATORI", "JUGADORES", "JOGADORES", "JOGADORES" } },
     { "POCKET FULL", { "POCKET FULL", "POCHE PLEINE", "TASCHE VOLL", "TASCA PIENA", "BOLSILLO LLENO", "BOLSO CHEIO", "BOLSO CHEIO" } },
     { "POKé BALLS", { "POKé BALLS", NULL, "BÄLLE", "POKé BALL", NULL, "POKé BOLAS", "POKé BOLAS" } },
     { "POKéDEX", { "POKéDEX", NULL, NULL, NULL, NULL, NULL, NULL } },
@@ -504,6 +508,7 @@ const struct pd_tr_entry pd_tr_table[804] = {
     { "PP", { "PP", NULL, "AP", NULL, NULL, NULL, NULL } },
     { "PRESS A BUTTON", { "PRESS A BUTTON", "APPUYEZ SUR UN BOUTON", "DRÜCK EINE TASTE", "PREMI UN TASTO", "PULSA UN BOTÓN", "APERTE UM BOTÃO", "CARREGA NUM BOTÃO" } },
     { "PRESS A KEY", { "PRESS A KEY", "APPUYEZ SUR UNE TOUCHE", "DRÜCK EINE TASTE", "PREMI UN TASTO", "PULSA UNA TECLA", "APERTE UMA TECLA", "CARREGA NUMA TECLA" } },
+    { "PUBLISHER", { "PUBLISHER", "ÉDITEUR", NULL, "EDITORE", "EDITOR", "DISTRIBUIDORA", "EDITORA" } },
     { "PWR", { "PWR", "PUIS.", "STÄRKE", "POT.", "POT.", "POD.", "POD." } },
     { "PWR %d", { "PWR %d", "PUI %d", "STK %d", "POT %d", "POT %d", "POD %d", "POD %d" } },
     { "PWR %d  PP %d", { "PWR %d  PP %d", "PUI %d  PP %d", "STK %d  AP %d", "POT %d  PP %d", "POT %d  PP %d", "POD %d  PP %d", "POD %d  PP %d" } },
@@ -529,10 +534,12 @@ const struct pd_tr_entry pd_tr_table[804] = {
     { "QUIT", { "QUIT", "QUITTER", "BEENDEN", "ESCI", "SALIR", "SAIR", "SAIR" } },
     { "QUIT TO GAME LIST", { "QUIT TO GAME LIST", "RETOUR À LA LISTE", "ZUR SPIELELISTE", "TORNA ALLA LISTA", "VOLVER A LA LISTA", "VOLTAR À LISTA", "VOLTAR À LISTA" } },
     { "RAILS", { "RAILS", "CÔTÉS", "SEITEN", "LATI", "LADOS", "LATERAIS", "LATERAIS" } },
+    { "RATING", { "RATING", "NOTE", "WERTUNG", "VOTO", "NOTA", "NOTA", "NOTA" } },
     { "RECENT", { "RECENT", "RÉCENTS", "ZULETZT", "RECENTI", "RECIENTES", "RECENTES", "RECENTES" } },
     { "RED A", { "RED A", "A ROUGE", "ROTES A", "A ROSSO", "A ROJO", "A VERMELHO", "A VERMELHO" } },
     { "REGISTER", { "REGISTER", "ENREGISTRER", "EINTRAGEN", "REGISTRA", "REGISTRAR", "REGISTRAR", "REGISTAR" } },
     { "RELEASE", { "RELEASE", "RELÂCHER", "FREILASSEN", "LIBERA", "LIBERAR", "SOLTAR", "LIBERTAR" } },
+    { "RELEASED", { "RELEASED", "SORTIE", "ERSCHIENEN", "USCITA", "LANZAMIENTO", "LANÇAMENTO", "LANÇAMENTO" } },
     { "RENAME THE BOX", { "RENAME THE BOX", "RENOMMER LA BOÎTE", "BOX UMBENENNEN", "RINOMINA IL BOX", "RENOMBRAR LA CAJA", "RENOMEAR A CAIXA", "RENOMEAR A CAIXA" } },
     { "REPEL", { "REPEL", "REPOUSSE", "SCHUTZ", "REPELLENTE", "REPELENTE", "REPELENTE", "REPELENTE" } },
     { "REPEL STEPS", { "REPEL STEPS", "PAS DE REPOUSSE", "SCHUTZ-SCHRITTE", "PASSI REPELLENTE", "PASOS DE REPELENTE", "PASSOS DE REPELENTE", "PASSOS DE REPELENTE" } },
@@ -626,6 +633,7 @@ const struct pd_tr_entry pd_tr_table[804] = {
     { "SURF", { "SURF", NULL, "SURFER", NULL, NULL, "SURFE", "SURFE" } },
     { "SURF SPEED", { "SURF SPEED", "VITESSE SURF", "SURFTEMPO", "VELOCITÀ SURF", "VEL. SURF", "VEL. SURFE", "VEL. SURF" } },
     { "SURFING", { "SURFING", "SURF", "SURFER", "SURF", "SURF", "SURFANDO", "A SURFAR" } },
+    { "SWAP", { "SWAP", "ÉCHANGER", "TAUSCHEN", "SCAMBIA", "CAMBIAR", "TROCAR", "TROCAR" } },
     { "SWAPPED", { "SWAPPED", "INVERSÉS", "GETAUSCHT", "SCAMBIATI", "INVERTIDOS", "INVERTIDOS", "TROCADOS" } },
     { "SWITCH", { "SWITCH", "ÉCHANGER", "TAUSCHEN", "SCAMBIA", "CAMBIAR", "TROCAR", "TROCAR" } },
     { "Save a state of the game as it is now? It replaces the last one. The save file isn't touched.", { "Save a state of the game as it is now? It replaces the last one. The save file isn't touched.", "Sauvegarder l'état du jeu maintenant ? Il remplace le dernier. La sauvegarde ne change pas.", "Einen State des Spiels jetzt sichern? Er ersetzt den letzten. Der Spielstand bleibt unberührt.", "Salvare uno stato del gioco così com'è? Sostituisce l'ultimo. Il salvataggio resta intatto.", "¿Guardar un estado del juego tal cual? Reemplaza al último. La partida no se toca.", "Salvar um estado do jogo agora? Substitui o último. O save não muda.", "Guardar um estado do jogo agora? Substitui o último. O jogo guardado não muda." } },
@@ -808,4 +816,4 @@ const struct pd_tr_entry pd_tr_table[804] = {
     { "the game.", { "the game.", "dans le jeu.", "im Spiel ab.", "nel gioco.", "en el juego.", "no jogo.", "no jogo." } },
     { "x%d  (a stack holds %d)", { "x%d  (a stack holds %d)", "x%d  (une pile en contient %d)", "x%d  (ein Stapel fasst %d)", "x%d  (una pila ne tiene %d)", "x%d  (un montón lleva %d)", "x%d  (uma pilha tem %d)", "x%d  (uma pilha tem %d)" } },
 };
-const int pd_tr_table_count = 804;
+const int pd_tr_table_count = 812;

@@ -136,11 +136,14 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     # touch screen, which the COMPANION button or the one under it swaps for the companion. That one is remembered.
     env['POCKET_SECOND_SCREEN']='1240x1080'
     with (d/'host.ini').open('a') as f:f.write('second_screen=1\n')
-    def second(rom,bottom=1080,**keys):
+    def shots(data,*args,**keys):
         env.update(keys)
-        run(d,str(d/'roms'/rom),'--frames','120','--shot',str(d/'two.png'))
+        run(data,*args,'--shot',str(d/'two.png'))
         for k in keys:del env[k]
-        w,h,bpp,rows=png_pixels(d/'two.png.second.png');assert (w,h)==(1240,1080),(w,h)
+        return d/'two.png',d/'two.png.second.png'
+    def size(shot):return struct.unpack('>II',shot.read_bytes()[16:24])
+    def second(rom,bottom=1080,**keys):
+        w,h,bpp,rows=png_pixels(shots(d,str(d/'roms'/rom),'--frames','120',**keys)[1]);assert (w,h)==(1240,1080),(w,h)
         return {tuple(rows[y][x*bpp:x*bpp+3]) for y in range(0,bottom,24) for x in range(0,w,24)}
     for rom in ('diagnostic.gb','diagnostic.gba'):
         party=second(rom);assert len(party)>3,rom
@@ -153,8 +156,12 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     # The LCD filter is over the touch screen and not over the companion.
     with (d/'host.ini').open('a') as f:f.write('lcd=1\n')
     assert second('diagnostic.nds',900)!=touch and second('diagnostic.gba')==party
+    # SWAPPED, the game is the one on the second screen.
+    with (d/'host.ini').open('a') as f:f.write('lcd=0\nsecond_screen=2\n')
+    for rom in ('diagnostic.gba','diagnostic.nds'):
+        game,other=shots(d,str(d/'roms'/rom),'--frames','120');assert size(game)==(1240,1080)!=size(other),rom
     del env['POCKET_SECOND_SCREEN']
-    with (d/'host.ini').open('a') as f:f.write('lcd=0\nsecond_screen=0\n')
+    with (d/'host.ini').open('a') as f:f.write('second_screen=0\n')
     # DS maps the ROM from its path, so it also works above the host's 64 MiB buffer limit.
     with (d/'roms/diagnostic.nds').open('r+b') as nds:nds.truncate(65 << 20)
     # Select DS from the sorted list, save a state through the host menu, and return (QUIT asks: CANCEL, then QUIT). In a
@@ -164,6 +171,24 @@ with tempfile.TemporaryDirectory(prefix='pd-host-') as d:
     lib=d/'library';(lib/'roms').mkdir(parents=True)
     for rom in ('diagnostic.gb','diagnostic.gba','diagnostic.nds'):os.link(d/'roms'/rom,lib/'roms'/rom)
     (lib/'library.txt').write_text('view=0\nsort=0\ngrid=0\n')
+    # A second screen has a page for the game under the cursor, its cover, facts and story from gamelist.xml. X trades the
+    # list and the page, which is remembered.
+    env['POCKET_SECOND_SCREEN']='1240x1080'
+    (lib/'host.ini').write_text('second_screen=1\n')
+    def listed(**keys):return [(size(p),p.read_bytes()) for p in shots(lib,'--frames','60',**keys)]
+    bare=listed()[1];assert bare[0]==(1240,1080),bare[0]
+    (lib/'roms/gamelist.xml').write_text(f'<gameList><game><path>./diagnostic.gb</path><thumbnail>{d}/gba.png</thumbnail>'
+        '<developer>Someone</developer><desc>A story.</desc></game></gameList>')
+    page=listed()[1];assert page[0]==bare[0] and page!=bare
+    assert listed(POCKET_KEYS='10:down')[1]!=page
+    for keys in ({'POCKET_KEYS':'10:x'},{}):
+        games,other=listed(**keys);assert games[0]==(1240,1080)!=other[0],keys
+    assert listed(POCKET_KEYS='10:x')[1]==page
+    # A finger on the list: a long press opens the game's menu, a drag doesn't, and neither plays it (a game would run on).
+    still,pressed,drag=(listed(POCKET_MOUSE=m)[0] for m in ('1:0:0','20:300:150:h','20:300:150:h,24:300:140,28:300:120,32:300:100:e'))
+    assert drag==still!=pressed
+    (lib/'roms/gamelist.xml').unlink()
+    del env['POCKET_SECOND_SCREEN']
     env['POCKET_KEYS']='10:down,20:down,40:a,70:menu,80:down,90:a,100:menu,110:up,120:a,130:down,140:a'
     run(lib,'--frames','65')
     del env['POCKET_KEYS']

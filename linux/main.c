@@ -428,6 +428,7 @@ static bool frontRowsCore;
 static int frontPress = -1;
 static bool frontOpenSettings;
 static bool libraryClick;              // a left press this frame
+static bool libraryPress;              // one on the list, not let go yet
 static bool libraryMenuClick;          // a right press this frame: the game under it opens its menu
 static int libraryWheel;               // wheel notches this frame (+ up)
 
@@ -510,7 +511,8 @@ static void script_rawkeys(void) {
 }
 static bool window_hotkey(const SDL_KeyboardEvent *k);
 static void window_follow(const SDL_WindowEvent *w);
-static void second_screen_set(bool on);
+enum { SECOND_OFF, SECOND_ON, SECOND_SWAPPED, SECOND_COUNT };
+static void second_screen_set(int mode);
 static void second_screen_update(void);
 /* The game list's SEARCH field is open (library_searching): text input is on, and the keyboard types into it instead of
  * pressing the game's buttons; its Backspace, Enter and Escape edit, finish and clear it. */
@@ -532,7 +534,7 @@ static void events(void) {
       if (e.window.windowID == SDL_GetWindowID(window))
         running = 0;
       else if (SDL_GetWindowFromID(e.window.windowID)) // not one closed since
-        second_screen_set(false);
+        second_screen_set(SECOND_OFF);
       continue;
     }
     if (e.type == SDL_JOYDEVICEADDED && !SDL_IsGameController(e.jdevice.which))
@@ -626,7 +628,7 @@ static void events(void) {
       pointerHeld = false; // its button-up may go to the window that took the focus
       pointerPulse = 0;
       pointerDown = false;
-      libraryClick = false;
+      libraryClick = libraryPress = false;
       libraryWheel = 0;
     }
     if (e.type == SDL_WINDOWEVENT && e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
@@ -639,11 +641,12 @@ static void events(void) {
   script_keys();
 }
 /* POCKET_MOUSE="TICK:X:Y[:c],...": where the cursor is (window pixels) from that tick on, ",c" clicking then (",r" a right click), for
- * tests, ",s" a tap on the second screen; the same tick numbering as POCKET_KEYS. */
+ * tests, ",h" a press that stays down until ",e", ",s" a tap on the second screen; the same tick numbering as POCKET_KEYS. */
 static struct {
   unsigned at;
   int x, y, wheel;
   bool click, menu, second; // 'c' a left click, 'r' a right one, 's' on the second screen
+  char hold;                // 'h' pressed from here, 'e' to here
 } mscript[16];
 static int mscriptN = -1;
 static void script_mouse(void) {
@@ -660,7 +663,8 @@ static void script_mouse(void) {
         mscript[mscriptN].x = x;
         mscript[mscriptN].y = y;
         mscript[mscriptN].wheel = c == 'd' ? -1 : c == 'u' ? 1 : 0;
-        mscript[mscriptN].click = c == 'c';
+        mscript[mscriptN].click = c == 'c' || c == 'h';
+        mscript[mscriptN].hold = c;
         mscript[mscriptN].menu = c == 'r';
         mscript[mscriptN].second = c == 's';
         mscriptN++;
@@ -677,6 +681,8 @@ static void script_mouse(void) {
         pointerPulse = 1;
         libraryClick = true;
       }
+      if (mscript[i].hold == 'h' || mscript[i].hold == 'e')
+        pointerHeld = mscript[i].hold == 'h';
       if (mscript[i].menu)
         libraryMenuClick = true;
       wheelSteps += mscript[i].wheel;
@@ -764,12 +770,13 @@ static struct {
   bool fullscreen; // the FULLSCREEN setting (F11 / Alt+Enter on a desktop)
   int panel;       // the PANEL setting: 0 = the window's size, else a preset the core lays out for
   bool sharedSaves;
-  bool secondScreen;
+  int secondScreen;
+  bool listSwapped; // X in the game list: the list on it
   // The desktop window as it was left (windowedHost only): its size, its place (winPlaced), and whether it was maximized.
   int winW, winH, winX, winY;
   bool winPlaced, maximized;
   char romDir[PATH_MAX], saveDir[PATH_MAX]; // a folder of the player's, from SETTINGS > FOLDERS (Windows)
-} hostSet = {0, false, false, false, {R2, L2, -1, -1}, {R2, L2, -1, -1}, SELECT, false, 0, false, false, 0, 0, 0, 0, false, false, {0}, {0}};
+} hostSet = {0, false, false, false, {R2, L2, -1, -1}, {R2, L2, -1, -1}, SELECT, false, 0, false, SECOND_OFF, false, 0, 0, 0, 0, false, false, {0}, {0}};
 static char hostIni[PATH_MAX];
 /* A DS game's L2 / R2 are its companion and screen buttons: with no modifier held for them, its FAST FORWARD and REWIND
  * go back to the stick clicks (R3 / L3), and come back to R2 / L2 when a modifier is picked again. */
@@ -837,7 +844,7 @@ static void path_beside(char *out, size_t size, const char *dir, const char *nam
 }
 static void host_load(void) {
   const char *dual = getenv("DEVICE_HAS_DUAL_SCREEN"); // ROCKNIX's
-  hostSet.secondScreen = dual && !strcmp(dual, "true");
+  hostSet.secondScreen = dual && !strcmp(dual, "true") ? SECOND_ON : SECOND_OFF;
   FILE *f = fopen(hostIni, "r");
   char line[PATH_MAX];
   int v;
@@ -866,8 +873,10 @@ static void host_load(void) {
       hostSet.fullscreen = v != 0;
     if (sscanf(line, "shared_saves=%d", &v) == 1)
       hostSet.sharedSaves = v != 0;
-    if (sscanf(line, "second_screen=%d", &v) == 1)
-      hostSet.secondScreen = v != 0;
+    if (sscanf(line, "second_screen=%d", &v) == 1 && v >= 0 && v < SECOND_COUNT)
+      hostSet.secondScreen = v;
+    if (sscanf(line, "list_swapped=%d", &v) == 1)
+      hostSet.listSwapped = v != 0;
     if (sscanf(line, "panel=%d", &v) == 1 && v >= 0 && v < PD_PANEL_PRESETS)
       hostSet.panel = v;
     int a, b;
@@ -918,7 +927,7 @@ static void host_save(void) {
     return;
   fprintf(f, "ff_speed=%d\nrewind=%d\nlcd=%d\nswap_ab=%d\n", hostSet.ffSpeed, hostSet.rewind, hostSet.lcd, hostSet.swapAB);
   fprintf(f, "fullscreen=%d\npanel=%d\nshared_saves=%d\n", hostSet.fullscreen, hostSet.panel, hostSet.sharedSaves);
-  fprintf(f, "second_screen=%d\n", hostSet.secondScreen);
+  fprintf(f, "second_screen=%d\nlist_swapped=%d\n", hostSet.secondScreen, hostSet.listSwapped);
   if (hostSet.winW > 0)
     fprintf(f, "window=%dx%d\n", hostSet.winW, hostSet.winH);
   if (hostSet.winPlaced)
@@ -994,16 +1003,45 @@ static void window_set_fullscreen(bool on) {
   outputChanged = true;
   host_save();
 }
+static bool inLibrary;
+static void textures_drop(void);
+static SDL_Renderer *renderer_open(void) {
+  // Presents wait for the refresh (the pacing, above); a driver without it gets the timer.
+  SDL_Renderer *r = SDL_CreateRenderer(window, -1, getenv("POCKET_NO_VSYNC") ? 0 : SDL_RENDERER_PRESENTVSYNC);
+  if (!r)
+    r = SDL_CreateRenderer(window, -1, 0);
+  if (r)
+    SDL_SetRenderDrawColor(r, 0, 0, 0, 255);
+  return r;
+}
+static void screens_swap(void) {
+  textures_drop();
+  second_screen_swap(&window, &renderer);
+  renderer = renderer_open();
+  outputChanged = true;
+  SDL_RaiseWindow(window);
+}
 static void second_screen_update(void) {
-  if (hostSet.secondScreen && second_screen_there(window))
+  const bool on = hostSet.secondScreen && second_screen_there(window);
+  const bool swap = on && (inLibrary ? hostSet.listSwapped : hostSet.secondScreen == SECOND_SWAPPED);
+  if (second_screen_swapped() && !swap)
+    screens_swap();
+  if (on)
     second_screen_open(window);
   else
     second_screen_close();
+  if (swap && !second_screen_swapped() && second_screen_up())
+    screens_swap();
 }
-static void second_screen_set(bool on) {
-  hostSet.secondScreen = on;
+static void second_screen_set(int mode) {
+  hostSet.secondScreen = mode;
   second_screen_update();
   host_save();
+}
+static void second_screen_step(int dir) { second_screen_set((hostSet.secondScreen + SECOND_COUNT + dir) % SECOND_COUNT); }
+static const char *second_screen_value(void) {
+  static const char *const values[SECOND_COUNT] = {"OFF", "ON", "SWAPPED"};
+  return values[hostSet.secondScreen];
 }
 /* F11, or Alt+Enter: fullscreen on / off. True when the key was this (its release too, so the game never sees half of
  * it: Enter is START). */
@@ -1019,7 +1057,7 @@ static bool window_hotkey(const SDL_KeyboardEvent *k) {
 /* The window as the player leaves it: its size and place while it's a normal window, and whether it's maximized
  * (written to host.ini on quit, host_save). */
 static void window_follow(const SDL_WindowEvent *w) {
-  if (!windowedHost || !window || window_is_fullscreen())
+  if (!windowedHost || !window || second_screen_swapped() || window_is_fullscreen())
     return;
   const Uint32 flags = SDL_GetWindowFlags(window);
   if (w->event == SDL_WINDOWEVENT_MAXIMIZED)
@@ -1642,7 +1680,7 @@ static bool environment(unsigned cmd, void *data) {
     snprintf(speed, sizeof speed, "%dx", hostSet.ffSpeed);
     const char *const values[FRONT_COUNT] = {hostSet.swapAB ? "SWAPPED" : "NORMAL", hostSet.ffSpeed ? speed : "MAX",
                                              hostSet.rewind ? "ON" : "OFF", hostSet.lcd ? "ON" : "OFF", "", "",
-                                             hostSet.secondScreen ? "ON" : "OFF", window_is_fullscreen() ? "ON" : "OFF"};
+                                             second_screen_value(), window_is_fullscreen() ? "ON" : "OFF"};
     // SECOND SCREEN only where there's one, FULLSCREEN only on a desktop: a handheld and gamescope always fill the screen.
     shownCount = 0;
     for (int i = 0; i < FRONT_COUNT; i++) {
@@ -2761,6 +2799,7 @@ static void run_game(const char *path, int maxFrames, const char *shot, bool fro
     repeat_directions();
     if (outputChanged) {
       outputChanged = false;
+      frame_texture(); // gone with its renderer, when the screens traded
       panel_follow();
     }
     const unsigned menuChord = (1u << START) | (1u << SELECT);
@@ -3140,7 +3179,7 @@ static void run_game(const char *path, int maxFrames, const char *shot, bool fro
         held = pressed = 0; // the A that chose it isn't the page's
         break;
       case FRONT_SECOND:
-        second_screen_set(!hostSet.secondScreen);
+        second_screen_step(1);
         break;
       case FRONT_FULLSCREEN:
         window_set_fullscreen(!window_is_fullscreen());
@@ -3515,7 +3554,7 @@ static void lib_value(int row, char *out, int len) {
   else if (row == HR_FULLSCREEN)
     snprintf(out, (size_t)len, "%s", window_is_fullscreen() ? "ON" : "OFF");
   else if (row == HR_SECOND)
-    snprintf(out, (size_t)len, "%s", hostSet.secondScreen ? "ON" : "OFF");
+    snprintf(out, (size_t)len, "%s", second_screen_value());
   else if (row == HR_ROMS_FOLDER || row == HR_SAVES_FOLDER) {
     const char *custom = row == HR_ROMS_FOLDER ? hostSet.romDir : hostSet.saveDir;
     if (!custom[0]) {
@@ -3553,7 +3592,7 @@ static void lib_step(int row, int dir) {
     window_set_fullscreen(!window_is_fullscreen()); // saves it
     return;
   } else if (row == HR_SECOND) {
-    second_screen_set(!hostSet.secondScreen); // saves it
+    second_screen_step(dir); // saves it
     return;
   } else if (row == HR_ROMS_FOLDER || row == HR_SAVES_FOLDER) {
     libraryFolderPick = row;
@@ -3569,7 +3608,7 @@ static void lib_step(int row, int dir) {
 #endif
 // SHARED SAVES only with folders to share, FULLSCREEN only on a desktop (windowedHost), the folders only on Windows:
 // lib_rows_build counts them.
-static struct lib_host libraryHost = {HR_KEYBOARD + 1, lib_label, lib_group, lib_value, lib_step, POCKET_VERSION};
+static struct lib_host libraryHost = {HR_KEYBOARD + 1, lib_label, lib_group, lib_value, lib_step, POCKET_VERSION, NULL};
 
 /* The game list's source: the ROM folder (or LocalState's roms), then POCKET_ROM_DIRS. */
 static int cmp(const void *a, const void *b);
@@ -3612,6 +3651,7 @@ static void library_reopen(void) {
   settings_migrate(); // before the library writes its first settings: an old DATA/settings.ini wins
   sharedFound = shared_saves_find() || hostSet.sharedSaves;
   libraryHost.settings = lib_rows_build();
+  second_screen_blank();
   library_open(libPaths, libCount, root, savesDir, &libraryHost);
   for (int i = 0; i < libCount; i++)
     free(libPaths[i]);
@@ -3624,16 +3664,19 @@ static uint32_t libraryTopPx[OVERLAY_MAX_W * OVERLAY_MAX_H];
 static SDL_Texture *libraryTopTexture, *coverTextures[1024];
 static unsigned coverSerials[1024];
 static int libraryTopW, libraryTopH;
-/* The same viewport library_present draws: window pixels, the scale, the canvas and its top-left corner. */
-static void library_viewport(int *ow, int *oh, int *scale, int *w, int *h, int *x0, int *y0) {
-  int width = W, height = H;
-  SDL_GetRendererOutputSize(renderer, &width, &height);
+static int library_canvas(int width, int height, int *w, int *h) {
   int s = width / 560 < height / 400 ? width / 560 : height / 400;
   if (s < 1)
     s = 1;
-  int cw = width / s, ch = height / s;
-  cw = cw > OVERLAY_MAX_W ? OVERLAY_MAX_W : cw;
-  ch = ch > OVERLAY_MAX_H ? OVERLAY_MAX_H : ch;
+  *w = width / s > OVERLAY_MAX_W ? OVERLAY_MAX_W : width / s;
+  *h = height / s > OVERLAY_MAX_H ? OVERLAY_MAX_H : height / s;
+  return s;
+}
+/* The same viewport library_present draws: window pixels, the scale, the canvas and its top-left corner. */
+static void library_viewport(int *ow, int *oh, int *scale, int *w, int *h, int *x0, int *y0) {
+  int width = W, height = H, cw, ch;
+  SDL_GetRendererOutputSize(renderer, &width, &height);
+  const int s = library_canvas(width, height, &cw, &ch);
   *ow = width;
   *oh = height;
   *scale = s;
@@ -3672,8 +3715,65 @@ static void library_textures_free(void) {
     SDL_DestroyTexture(libraryTopTexture);
   libraryTopTexture = NULL;
 }
-static void library_present(struct pd_menu *page) {
+// Every texture goes with its renderer. Each is made again when it's next drawn.
+static void textures_drop(void) {
+  SDL_Texture **const all[] = {&frameTexture, &panelTexture, &hudTexture, &compTexture, &overlayTexture, &closeTex};
+  for (size_t i = 0; i < sizeof all / sizeof *all; i++) {
+    if (*all[i])
+      SDL_DestroyTexture(*all[i]);
+    *all[i] = NULL;
+  }
+  pocket_lcd_drop(&lcd);
+  library_textures_free();
+}
+static void library_swap(void) {
+  hostSet.listSwapped = !hostSet.listSwapped;
+  second_screen_update();
+  host_save();
+}
+// A press on the list: a click when it's let go where it was, the game's menu when it stays, a drag when it moves.
+static void library_press(int x, int y, bool starts) {
+  static int x0, y0, lastY;
+  static bool moved;
+  static Uint32 at;
+  if (starts) {
+    libraryPress = true;
+    moved = false;
+    x0 = x, y0 = lastY = y;
+    at = SDL_GetTicks();
+  }
+  if (!libraryPress)
+    return;
+  moved |= abs(x - x0) > 8 || abs(y - y0) > 8;
+  if (moved) {
+    library_drag(y - lastY);
+    lastY = y;
+  }
+  if (!pointerHeld) {
+    libraryPress = false;
+    if (!moved)
+      library_pointer(x0, y0, true, 0);
+  } else if (!moved && SDL_GetTicks() - at >= 500) {
+    libraryPress = false;
+    library_menu_at(x0, y0);
+  }
+}
+static void library_second(void) {
+  static uint32_t px[OVERLAY_MAX_W * OVERLAY_MAX_H];
+  int width, height, w, h, count;
+  libraryHost.swap = second_screen_up() ? library_swap : NULL;
+  if (!second_screen_size(&width, &height))
+    return;
+  library_canvas(width, height, &w, &h);
+  struct pd_canvas c;
+  pd_canvas_init(&c, w, h, px);
+  const struct second_picture *pics;
+  const bool drawn = library_media(&c, &pics, &count);
+  second_screen_page(px, w, h, pics, count, drawn);
   second_screen_present();
+}
+static void library_present(struct pd_menu *page) {
+  library_second();
   int ow, oh, s, w, h, x0, y0;
   library_viewport(&ow, &oh, &s, &w, &h, &x0, &y0);
   SDL_RenderClear(renderer);
@@ -3924,15 +4024,13 @@ int main(int argc, char **argv) {
 #if defined(_WIN32) && !defined(PD_UWP)
   set_window_icon(window);
 #endif
-  // Presents wait for the refresh (the pacing, above); a driver without it gets the timer.
-  renderer = window ? SDL_CreateRenderer(window, -1, getenv("POCKET_NO_VSYNC") ? 0 : SDL_RENDERER_PRESENTVSYNC) : NULL;
-  if (!renderer && window)
-    renderer = SDL_CreateRenderer(window, -1, 0);
+  renderer = window ? renderer_open() : NULL;
   if (!renderer) {
     fprintf(stderr, "Video: %s\n", SDL_GetError());
     SDL_Quit();
     return 1;
   }
+  inLibrary = !rom;
   second_screen_update();
   SDL_RendererInfo rendererInfo;
   if (!SDL_GetRendererInfo(renderer, &rendererInfo))
@@ -3947,7 +4045,6 @@ int main(int argc, char **argv) {
   // SDL starts text input with the window, and Steam answers it with its on-screen keyboard: the host reads keys,
   // never text.
   SDL_StopTextInput();
-  SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
   audio_open();
   rawTrimui = getenv("POCKET_RAW_TRIMUI") && !strcmp(getenv("POCKET_RAW_TRIMUI"), "1");
   snprintf(path, sizeof path, "%s/gamecontrollerdb.txt", root);
@@ -4073,7 +4170,7 @@ int main(int argc, char **argv) {
           keyPage = false; // a click beside the page closes it
         }
         kb_menu_build();
-        libraryClick = false;
+        libraryClick = libraryPress = false;
         libraryWheel = 0;
       } else if (folderPage) {
         folder_page_keys();
@@ -4090,18 +4187,18 @@ int main(int argc, char **argv) {
         } else if (libraryClick) {
           folderPage = false; // a click beside the page closes it
         }
-        libraryClick = libraryMenuClick = false;
+        libraryClick = libraryMenuClick = libraryPress = false;
         libraryWheel = 0;
-      } else if (libraryClick || libraryWheel || libraryMenuClick) {
+      } else if (libraryClick || libraryPress || libraryWheel || libraryMenuClick) {
         int ow, oh, s, w, h, x0, y0;
         library_viewport(&ow, &oh, &s, &w, &h, &x0, &y0);
         int mx = (mouseWindowX - x0) / s, my = (mouseWindowY - y0) / s;
-        if (mx >= 0 && my >= 0 && mx < w && my < h) {
-          if (libraryMenuClick)
-            library_menu_at(mx, my); // a right click: the game's menu, as the app's long press
-          else
-            library_pointer(mx, my, libraryClick, libraryWheel);
-        }
+        const bool on = mx >= 0 && my >= 0 && mx < w && my < h;
+        if (libraryMenuClick && on)
+          library_menu_at(mx, my); // a right click: the game's menu, as the app's long press
+        else if (libraryWheel && on)
+          library_pointer(mx, my, false, libraryWheel);
+        library_press(mx, my, libraryClick && on);
         libraryClick = libraryMenuClick = false;
         libraryWheel = 0;
       }
@@ -4115,9 +4212,14 @@ int main(int argc, char **argv) {
         snprintf(picked, sizeof picked, "%s", game);
         appError = 0;
         library_pause(true); // no hashing or cover downloads while a game plays
+        inLibrary = false;
+        second_screen_blank();
+        second_screen_update();
         run_game(picked, 0, NULL, true); // the last game's result is the exit status
+        inLibrary = true;
+        second_screen_update();
         library_pause(false);
-        libraryClick = false; // a click in the game is not one in the library
+        libraryClick = libraryPress = false; // a click in the game is not one in the library
         libraryWheel = 0;
         library_played(picked);
       }
@@ -4129,6 +4231,7 @@ int main(int argc, char **argv) {
       }
       SDL_Delay(16);
     }
+    second_screen_blank();
     library_close();
     library_textures_free();
   }
@@ -4138,13 +4241,11 @@ int main(int argc, char **argv) {
     SDL_GameControllerClose(controller);
   if (audio)
     SDL_CloseAudioDevice(audio);
-  if (frameTexture)
-    SDL_DestroyTexture(frameTexture);
-  if (overlayTexture)
-    SDL_DestroyTexture(overlayTexture);
-  pocket_lcd_drop(&lcd);
   if (windowedHost)
     host_save(); // the window's size, place and maximized state, as the player left them
+  if (second_screen_swapped())
+    screens_swap();
+  textures_drop();
   second_screen_close();
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);

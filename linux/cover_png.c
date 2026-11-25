@@ -134,19 +134,14 @@ static uint32_t *decode(const char *path, int *outW, int *outH) {
   return px;
 }
 
-bool cover_png_square(const char *path, int size, uint32_t *out, bool fit) {
-  int w, h;
-  uint32_t *px = decode(path, &w, &h);
-  if (!px)
-    return false;
-  // The middle square (the box's sides cut evenly), area-averaged down (or sampled up) to size x size.
-  int side = fit ? (w > h ? w : h) : (w < h ? w : h), x0 = (w - side) / 2, y0 = (h - side) / 2;
-  for (int y = 0; y < size; y++) {
-    int sy0 = y * side / size, sy1 = (y + 1) * side / size;
+// The sw x sh pixels at (x0, y0), see-through past the picture's edges, area-averaged down (or sampled up) to ow x oh.
+static void average(const uint32_t *px, int w, int h, int x0, int y0, int sw, int sh, uint32_t *out, int ow, int oh) {
+  for (int y = 0; y < oh; y++) {
+    int sy0 = y * sh / oh, sy1 = (y + 1) * sh / oh;
     if (sy1 <= sy0)
       sy1 = sy0 + 1;
-    for (int x = 0; x < size; x++) {
-      int sx0 = x * side / size, sx1 = (x + 1) * side / size;
+    for (int x = 0; x < ow; x++) {
+      int sx0 = x * sw / ow, sx1 = (x + 1) * sw / ow;
       if (sx1 <= sx0)
         sx1 = sx0 + 1;
       unsigned long a = 0, r = 0, g = 0, b = 0, n = 0;
@@ -161,9 +156,36 @@ bool cover_png_square(const char *path, int size, uint32_t *out, bool fit) {
           b += (p & 0xFF) * al;
           n++;
         }
-      out[y * size + x] = a ? (uint32_t)(a / n) << 24 | (uint32_t)(r / a) << 16 | (uint32_t)(g / a) << 8 | (uint32_t)(b / a) : 0;
+      out[(size_t)y * ow + x] = a ? (uint32_t)(a / n) << 24 | (uint32_t)(r / a) << 16 | (uint32_t)(g / a) << 8 | (uint32_t)(b / a) : 0;
     }
   }
+}
+
+bool cover_png_square(const char *path, int size, uint32_t *out, bool fit) {
+  int w, h;
+  uint32_t *px = decode(path, &w, &h);
+  if (!px)
+    return false;
+  // The middle square (the box's sides cut evenly).
+  int side = fit ? (w > h ? w : h) : (w < h ? w : h);
+  average(px, w, h, (w - side) / 2, (h - side) / 2, side, side, out, size, size);
   free(px);
   return true;
+}
+
+// malloc'd, 0xAARRGGBB, its longer side [maxSide] at most.
+uint32_t *cover_png_load(const char *path, int maxSide, int *w, int *h) {
+  uint32_t *px = decode(path, w, h);
+  const int side = px ? (*w > *h ? *w : *h) : 0;
+  if (side <= maxSide)
+    return px;
+  const int ow = *w * maxSide / side > 0 ? *w * maxSide / side : 1, oh = *h * maxSide / side > 0 ? *h * maxSide / side : 1;
+  uint32_t *out = malloc((size_t)ow * oh * 4);
+  if (out) {
+    average(px, *w, *h, 0, 0, *w, *h, out, ow, oh);
+    *w = ow;
+    *h = oh;
+  }
+  free(px);
+  return out;
 }

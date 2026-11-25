@@ -10,5 +10,6 @@
 /* [path]'s middle square, scaled to size x size (0xAARRGGBB, area-averaged) into out; false = not a PNG this reads.
  * [fit]: the whole picture inside the square instead (a portrait box, see-through beside it). */
 bool cover_png_square(const char *path, int size, uint32_t *out, bool fit);
+uint32_t *cover_png_load(const char *path, int maxSide, int *w, int *h);
 
 #endif

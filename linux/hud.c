@@ -1290,21 +1290,23 @@ int hud_strip_step(int shown, bool up) {
   return shown < 0 ? 0 : shown > HUD_STRIP_ROWS ? HUD_STRIP_ROWS : shown;
 }
 
-bool hud_strip_hit(int y, int h, int k, int shown, int ty) { return ty < y + h && ty >= y + h - shown * k; }
+bool hud_strip_hit(int y, int h, int k, int shown, bool above, int ty) {
+  return above ? ty >= y && ty < y + shown * k : ty < y + h && ty >= y + h - shown * k;
+}
 
-void hud_strip_draw(struct pd_canvas *c, int x, int y, int w, int h, int k, int shown, int tick) {
+void hud_strip_draw(struct pd_canvas *c, int x, int y, int w, int h, int k, int shown, bool above, int tick) {
   static const int arrow[] = {17, 15, 13, 11, 9, 7, 5, 3, 1};
   const int t = tick % 58, bob = t < 5 ? 0 : t < 11 ? 1 : t < 16 ? 2 : t < 27 ? 3 : t < 32 ? 2 : t < 38 ? 1 : 0;
-  const int top = y + h - shown * k, body = HUD_STRIP_ROWS - 3;
+  const int top = above ? y + (shown - 1) * k : y + h - shown * k, step = above ? -k : k, body = HUD_STRIP_ROWS - 3;
   pd_clip(c, x, y, w, h);
   pd_fill(c, x, top, w, k, 0x6C7080);
-  pd_fill(c, x, top + k, w, k, 0xFAFAFE);
+  pd_fill(c, x, top + step, w, k, 0xFAFAFE);
   for (int i = 0; i < body; i++)
-    pd_fill(c, x, top + (2 + i) * k, w, k, mix_color(0xE4E6EC, 0xA6AAB6, (unsigned)(i * 100 / (body - 1))));
-  pd_fill(c, x, top + (HUD_STRIP_ROWS - 1) * k, w, k, 0x878B98);
+    pd_fill(c, x, top + (2 + i) * step, w, k, mix_color(0xE4E6EC, 0xA6AAB6, (unsigned)(i * 100 / (body - 1))));
+  pd_fill(c, x, top + (HUD_STRIP_ROWS - 1) * step, w, k, 0x878B98);
   for (int shadow = 1; shadow >= 0; shadow--)
     for (int i = 0; i < 9; i++)
-      pd_fill(c, x + (w - arrow[i] * k) / 2, top + (5 + bob + i + shadow) * k, arrow[i] * k, k, shadow ? 0xFAFAFB : 0x454957);
+      pd_fill(c, x + (w - arrow[i] * k) / 2, top + (5 + bob + i + shadow) * step, arrow[i] * k, k, shadow ? 0xFAFAFB : 0x454957);
   pd_unclip(c);
 }
 

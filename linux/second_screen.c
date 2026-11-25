@@ -11,10 +11,16 @@ static SDL_Renderer *out;
 static struct layer {
   SDL_Texture *picture, *sharp;
   int w, h, k;
-} under, over; // a DS's touch screen, the core's picture
+  unsigned serial;
+} under, over, art[SECOND_PICTURES]; // a DS's touch screen, the core's picture or the host's page, the page's pictures
+static struct {
+  const uint32_t *px;
+  const struct second_picture *pics;
+  int w, h, count;
+} page;
 static struct pd_second_screen last;
 static struct pocket_lcd lcd; // over a DS's touch screen
-static bool lcdOn, changed;
+static bool lcdOn, changed, swapped;
 static int mouseX, mouseY, notches;
 static bool held, pulse, pressed, beside;
 static Uint32 inputAt;
@@ -74,19 +80,45 @@ static void layer_drop(struct layer *l) {
   *l = (struct layer){0};
 }
 
-void second_screen_close(void) {
+static void layers_drop(void) {
   layer_drop(&under);
   layer_drop(&over);
+  for (int i = 0; i < SECOND_PICTURES; i++)
+    layer_drop(&art[i]);
   pocket_lcd_drop(&lcd);
+}
+
+void second_screen_close(void) {
+  layers_drop();
   if (out)
     SDL_DestroyRenderer(out);
   if (win)
     SDL_DestroyWindow(win);
   out = NULL;
   win = NULL;
-  last.pixels = last.panel = NULL;
+  last.pixels = last.panel = page.px = NULL;
   held = pulse = pressed = beside = false;
 }
+
+bool second_screen_up(void) { return win != NULL; }
+
+// The two windows trade what they show. [renderer] goes with the textures made on it: the host makes another for its new
+// [window].
+void second_screen_swap(SDL_Window **window, SDL_Renderer **renderer) {
+  layers_drop();
+  SDL_DestroyRenderer(out);
+  SDL_DestroyRenderer(*renderer);
+  *renderer = NULL;
+  SDL_Window *was = *window;
+  *window = win;
+  win = was;
+  out = SDL_CreateRenderer(win, -1, 0);
+  held = pulse = pressed = beside = false;
+  changed = true;
+  swapped = !swapped;
+}
+
+bool second_screen_swapped(void) { return swapped; }
 
 bool second_screen_focused(void) { return win && SDL_GetKeyboardFocus() == win; }
 
@@ -142,26 +174,33 @@ void second_screen_tap(int x, int y) {
   inputAt = SDL_GetTicks();
 }
 
-static SDL_Rect place(int srcW, int srcH) {
-  int w = 0, h = 0;
-  SDL_GetRendererOutputSize(out, &w, &h);
-  SDL_Rect r = {0, 0, w, h};
-  if (w * srcH > h * srcW)
-    r.w = h * srcW / srcH;
+// A w x h picture in the middle of [in]: the whole of it, or with [cover] as much as fills [in].
+SDL_Rect second_screen_fit(int w, int h, SDL_Rect in, bool cover) {
+  SDL_Rect r = in;
+  if ((in.w * h > in.h * w) != cover)
+    r.w = in.h * w / h;
   else
-    r.h = w * srcH / srcW;
-  r.x = (w - r.w) / 2;
-  r.y = (h - r.h) / 2;
+    r.h = in.w * h / w;
+  r.x += (in.w - r.w) / 2;
+  r.y += (in.h - r.h) / 2;
   return r;
+}
+
+static SDL_Rect place(int srcW, int srcH) {
+  SDL_Rect all = {0, 0, 0, 0};
+  SDL_GetRendererOutputSize(out, &all.w, &all.h);
+  return second_screen_fit(srcW, srcH, all, false);
 }
 
 void second_screen_message(struct pd_second_screen *s, bool lcdNow) {
   s->w = s->h = s->ptr_x = s->ptr_y = s->ptr_down = s->wheel = 0;
+  s->above = swapped;
   if (!win)
     return;
-  changed |= s->changed || s->pixels != last.pixels || s->panel != last.panel || lcdNow != lcdOn;
+  changed |= page.px || s->changed || s->pixels != last.pixels || s->panel != last.panel || lcdNow != lcdOn;
   last = *s;
   lcdOn = lcdNow;
+  page.px = NULL;
   if (SDL_GetTicks() - inputAt > 250) // from while a menu or the game list was up
     pulse = false, notches = 0;
   SDL_GetRendererOutputSize(out, &s->w, &s->h);
@@ -189,8 +228,19 @@ void second_screen_message(struct pd_second_screen *s, bool lcdNow) {
   notches = 0;
 }
 
+bool second_screen_size(int *w, int *h) { return win && !SDL_GetRendererOutputSize(out, w, h) && *w > 0 && *h > 0; }
+
+void second_screen_page(const uint32_t *px, int w, int h, const struct second_picture *pics, int count, bool drawn) {
+  changed |= drawn || page.px != px;
+  page.px = px;
+  page.pics = pics;
+  page.w = w;
+  page.h = h;
+  page.count = count < SECOND_PICTURES ? count : SECOND_PICTURES;
+}
+
 void second_screen_blank(void) {
-  last.pixels = last.panel = NULL;
+  last.pixels = last.panel = page.px = NULL;
   changed = true;
   second_screen_present();
 }
@@ -204,14 +254,29 @@ static SDL_Texture *texture(int access, int w, int h, bool smooth) {
   return t;
 }
 
-static void layer_draw(struct layer *l, const uint32_t *px, int w, int h, SDL_Rect r, SDL_BlendMode blend) {
+static bool layer_fill(struct layer *l, int access, const uint32_t *px, int w, int h, bool smooth) {
   if (!l->picture || l->w != w || l->h != h) {
     layer_drop(l);
-    l->picture = texture(SDL_TEXTUREACCESS_STREAMING, w, h, false);
+    l->picture = texture(access, w, h, smooth);
     l->w = w;
     l->h = h;
   }
-  if (!l->picture || SDL_UpdateTexture(l->picture, NULL, px, w * 4))
+  return l->picture && !SDL_UpdateTexture(l->picture, NULL, px, w * 4);
+}
+
+// A page's picture: smooth, and made again only when it's another.
+static void picture_draw(struct layer *l, const struct second_picture *p, SDL_Rect r) {
+  if (!l->picture || l->serial != p->serial) {
+    if (!layer_fill(l, SDL_TEXTUREACCESS_STATIC, p->px, p->w, p->h, true))
+      return;
+    l->serial = p->serial;
+    SDL_SetTextureBlendMode(l->picture, SDL_BLENDMODE_BLEND);
+  }
+  SDL_RenderCopy(out, l->picture, NULL, &r);
+}
+
+static void layer_draw(struct layer *l, const uint32_t *px, int w, int h, SDL_Rect r, SDL_BlendMode blend) {
+  if (!layer_fill(l, SDL_TEXTUREACCESS_STREAMING, px, w, h, false))
     return;
   const int k = r.w / w < r.h / h ? r.w / w : r.h / h;
   SDL_Texture *from = l->picture;
@@ -241,6 +306,17 @@ static SDL_Rect within(SDL_Rect r, int srcW, int srcH, SDL_Rect box) {
 static void draw(void) {
   SDL_SetRenderDrawColor(out, 0, 0, 0, 255);
   SDL_RenderClear(out);
+  if (page.px) {
+    const SDL_Rect r = place(page.w, page.h);
+    for (int pass = 0; pass < 2; pass++) {
+      for (int i = 0; i < page.count; i++)
+        if (page.pics[i].under == !pass)
+          picture_draw(&art[i], &page.pics[i], within(r, page.w, page.h, page.pics[i].box));
+      if (!pass)
+        layer_draw(&over, page.px, page.w, page.h, r, SDL_BLENDMODE_BLEND);
+    }
+    return;
+  }
   if (!last.pixels || last.src_w <= 0 || last.src_h <= 0)
     return;
   const SDL_Rect r = place(last.src_w, last.src_h);

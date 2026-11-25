@@ -77,7 +77,7 @@ struct pd_front_rows {
  * and the finger on it, in the same struct. A frontend without the command, or one that answers every private command
  * true, leaves w and h at 0: no second screen. [data] is a pd_second_screen; the pixels stay valid until the core's next
  * frame or its game's unload. With a [panel] (a DS's touch screen) the picture is ARGB8888 and goes over it, alpha 0 = clear.
- * The host fills the last two lines. */
+ * The host fills the last three lines. */
 #define PD_ENV_SECOND_SCREEN 0x20006
 struct pd_second_screen {
   const uint32_t *pixels; /* src_w x src_h, XRGB8888; NULL = black */
@@ -87,6 +87,7 @@ struct pd_second_screen {
   int panel_w, panel_h, box_x, box_y, box_w, box_h; /* the box is in the picture's pixels */
   int w, h;
   int ptr_x, ptr_y, ptr_down, wheel; /* the finger or mouse in the picture's pixels, the notches since the call before (+ up) */
+  int above; /* it's over the game's screen, not under it */
 };
 
 /* Where the host puts the companion's picture in a ow x oh window: the largest whole scale that keeps it within 94% of the

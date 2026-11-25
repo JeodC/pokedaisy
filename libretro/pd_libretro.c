@@ -918,14 +918,14 @@ static void picture_rect(int *x, int *y, int *w, int *h) {
 static void draw_strip(void) {
   int x, y, w, h;
   picture_rect(&x, &y, &w, &h);
-  hud_strip_draw(&canvas, x, y, w, h, h / (int)gameH, stripRows, frames);
+  hud_strip_draw(&canvas, x, y, w, h, h / (int)gameH, stripRows, second.above, frames);
 }
 static bool strip_hit(int tx, int ty) {
   int x, y, w, h;
   if (!stripRows)
     return false;
   picture_rect(&x, &y, &w, &h);
-  return tx >= x && tx < x + w && hud_strip_hit(y, h, h / (int)gameH, stripRows, ty);
+  return tx >= x && tx < x + w && hud_strip_hit(y, h, h / (int)gameH, stripRows, second.above, ty);
 }
 
 /* The HUD over the game's own picture, a canvas pixel a game pixel: SIZE picks the mini HUD (SMALL, NORMAL) or the full

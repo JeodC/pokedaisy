@@ -77,6 +77,7 @@ mkdir "%LAYOUT%\Assets"
 rem The host's own sources, then every part of the companion the library draws with.
 > "%OBJ%\sources.rsp" echo "%ROOT%\linux\main.c"
 >> "%OBJ%\sources.rsp" echo "%ROOT%\linux\library.c"
+>> "%OBJ%\sources.rsp" echo "%ROOT%\linux\library_media.c"
 >> "%OBJ%\sources.rsp" echo "%ROOT%\linux\cover_png.c"
 >> "%OBJ%\sources.rsp" echo "%ROOT%\linux\display_filter.c"
 >> "%OBJ%\sources.rsp" echo "%ROOT%\linux\second_screen.c"

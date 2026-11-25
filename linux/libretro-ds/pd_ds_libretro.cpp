@@ -1132,7 +1132,7 @@ void present_frame(const void* data) {
   stripRows=hud_strip_step(stripRows,secondPad);
   if(stripRows){
     pd_canvas c;pd_canvas_init(&c,w,h,stage);
-    hud_strip_draw(&c,0,0,w,h,2,stripRows,tick);
+    hud_strip_draw(&c,0,0,w,h,2,stripRows,second.above,tick);
     stageMarked=true;
   }
   presentedField=!stripRows;
@@ -1225,7 +1225,7 @@ void hud_open_target(int id) {
 // A tap on the strip, kept from the game until it's lifted.
 bool strip_tapped(){
   const int y=(input(0,RETRO_DEVICE_POINTER,0,RETRO_DEVICE_ID_POINTER_Y)+32767)*384/65535;
-  if(!input(0,RETRO_DEVICE_POINTER,0,RETRO_DEVICE_ID_POINTER_PRESSED) || !hud_strip_hit(0,384,2,stripRows,y))return false;
+  if(!input(0,RETRO_DEVICE_POINTER,0,RETRO_DEVICE_ID_POINTER_PRESSED) || !hud_strip_hit(0,384,2,stripRows,second.above,y))return false;
   compDimHeld=true;
   return true;
 }
